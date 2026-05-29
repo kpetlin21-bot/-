@@ -1,0 +1,44 @@
+name: Deploy via FTP
+
+# Автоматический деплой на хостинг по FTP.
+# Запускается при каждом пуше в ветку main, а также вручную из вкладки Actions.
+# FTP руками трогать больше не нужно — всё заливается автоматически.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ftp-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: FTP Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to FTP server
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # Протокол: ftp, ftps или ftps-legacy. По умолчанию ftp.
+          protocol: ${{ vars.FTP_PROTOCOL || 'ftp' }}
+          # Порт FTP-сервера. По умолчанию 21.
+          port: ${{ vars.FTP_PORT || '21' }}
+          # Каталог на сервере, куда заливать файлы (со слешем в конце).
+          # По умолчанию корень FTP-аккаунта. Можно переопределить через переменную.
+          server-dir: ${{ vars.FTP_SERVER_DIR || './' }}
+          # Какие файлы НЕ заливать на хостинг.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            README.md
