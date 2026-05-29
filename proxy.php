@@ -175,17 +175,33 @@ switch ($action) {
     case 'period_tasks':
         set_time_limit(120);
         $date = $_GET['date'] ?? $today;
+        $nocache = isset($_GET['nocache']);
 
-        // Кеш на 15 минут для периодных запросов
         $cacheKey  = 'tb_pt_' . TB_PROJECT . '_' . md5($date) . '.json';
         $cacheFile = sys_get_temp_dir() . '/' . $cacheKey;
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
+
+        // Сброс кеша если запрошен
+        if ($nocache && file_exists($cacheFile)) { unlink($cacheFile); }
+
+        if (!$nocache && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
             header('X-Cache: HIT');
             echo file_get_contents($cacheFile);
             break;
         }
 
-        $allTasks  = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT]);
+        // Делаем первый запрос напрямую чтобы проверить URL
+        $firstUrl = TB_BASE_URL . '/reports/tasks?' . http_build_query(['date' => $date, 'project' => TB_PROJECT, 'limit' => 250]);
+        $ctx = stream_context_create(['http' => [
+            'method'  => 'GET',
+            'header'  => 'Authorization: Api-Key ' . TB_API_KEY . "\r\nAccept: application/json",
+            'timeout' => 15,
+            'ignore_errors' => true,
+        ]]);
+        $firstBody = @file_get_contents($firstUrl, false, $ctx);
+        $firstJson = $firstBody ? json_decode($firstBody, true) : null;
+        $firstCount = count($firstJson['data'] ?? []);
+
+        $allTasks = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT]);
         $totalCnt  = count($allTasks);
         $doneCnt   = 0; $inProgressCnt = 0; $missedCnt = 0;
         foreach ($allTasks as $t) {
@@ -197,10 +213,12 @@ switch ($action) {
         $rate = $totalCnt > 0 ? round($doneCnt / $totalCnt * 100) : 0;
 
         $result = json_encode([
-            'date'       => $date,
-            'tasks'      => ['total'=>$totalCnt,'done'=>$doneCnt,'in_progress'=>$inProgressCnt,'missed'=>$missedCnt,'rate'=>$rate],
+            'date'        => $date,
+            'debug_url'   => $firstUrl,
+            'debug_first' => $firstCount,
+            'tasks'       => ['total'=>$totalCnt,'done'=>$doneCnt,'in_progress'=>$inProgressCnt,'missed'=>$missedCnt,'rate'=>$rate],
         ], JSON_UNESCAPED_UNICODE);
-        file_put_contents($cacheFile, $result);
+        if ($totalCnt > 0) file_put_contents($cacheFile, $result);
         echo $result;
         break;
 
