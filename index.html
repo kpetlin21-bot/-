@@ -489,6 +489,7 @@ document.getElementById('period-seg').addEventListener('click',e=>{
   period=b.dataset.p;
   document.querySelectorAll('#period-seg button').forEach(x=>x.classList.toggle('active',x===b));
   loadPeriod(period);
+  if(period==='today'||period==='yesterday') loadHouseBreakdown();
 });
 
 // Загружаем данные за произвольный период
@@ -505,6 +506,8 @@ async function loadPeriod(p){
     periodData=periodCache[cacheKey];
     renderKPI(); renderCharts();
     setStatus('✓ '+periodCache[cacheKey].suffix);
+    renderShifts();
+    if(p==='today'||p==='yesterday') loadHouseBreakdown();
     return;
   }
 
@@ -549,7 +552,8 @@ async function loadPeriod(p){
     setStatus('⚠ Ошибка: '+e.message);
     console.error('loadPeriod:', e);
   }
-  renderShifts(); renderSummary();
+  renderShifts();
+  if(p==='today'||p==='yesterday') loadHouseBreakdown();
 }
 async function loadToday(){
   await loadPeriod('today');
@@ -564,7 +568,7 @@ async function loadHouseBreakdown(){
   try{
     document.getElementById('house-detail').innerHTML=
       '<div style="color:var(--text-3);font-size:13px;">⏳ Загрузка детализации по домам…</div>';
-    const r=await fetchWithTimeout(PROXY+'?action=house_breakdown&date='+today, 120000);
+    const r=await fetchWithTimeout(PROXY+'?action=house_breakdown&date=today', 120000);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     if(d.houses && d.houses.length){
