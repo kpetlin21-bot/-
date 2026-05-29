@@ -1,0 +1,27 @@
+name: Deploy to server
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'index.html'
+      - 'proxy.php'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH (rsync)
+        uses: easingthemes/ssh-deploy@v5
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_KEY }}
+          ARGS: "-avz --delete"
+          SOURCE: "index.html proxy.php"
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          REMOTE_PORT: ${{ secrets.SSH_PORT }}
+          TARGET: ${{ secrets.DEPLOY_PATH }}
