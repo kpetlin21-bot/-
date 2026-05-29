@@ -239,14 +239,15 @@ function renderKPI(){
 
 let chartRate;
 function renderCharts(){
-  if(!history.length){ if(chartRate)chartRate.destroy(); return; }
   if(chartRate)chartRate.destroy();
+  if(!periodData) return;
   const rateTitle=document.getElementById('rate-title');
+
   if(isDayMode()){
-    const rec=dayRec();
-    const h=buildHourly(rec?rec.closed:0);
+    // Почасовой график для сегодня/вчера
+    const h=buildHourly(periodData.closed||0);
     const labels=h.hours.map(x=>x+':00');
-    let cum=0; const total=h.totalTasks;
+    let cum=0; const total=h.totalTasks||1;
     const cumPct=h.perHour.map(v=>{cum+=v; return Math.round(cum/total*100);});
     rateTitle.textContent='Выполнение по часам ('+(period==='today'?'сегодня':'вчера')+')';
     chartRate=new Chart(document.getElementById('chartRate'),{
@@ -260,13 +261,28 @@ function renderCharts(){
         plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:11}}}}}
     });
   } else {
-    const data=viewData(); const labels=data.map(d=>fmtDate(d.date));
+    // Динамика по дням из истории Supabase (если есть), иначе одна точка
+    const data = history.length ? history.slice(-parseInt(period)||30) : [];
     rateTitle.textContent='Динамика выполнения задач, %';
-    chartRate=new Chart(document.getElementById('chartRate'),{
-      type:'line',
-      data:{labels,datasets:[{label:'% выполнения',data:data.map(d=>d.rate),borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',fill:true,tension:0.3,pointRadius:2}]},
-      options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}},plugins:{legend:{display:false}}}
-    });
+    if(!data.length){
+      // Нет истории — показываем одну точку текущего периода
+      chartRate=new Chart(document.getElementById('chartRate'),{
+        type:'bar',
+        data:{labels:[periodData.suffix],datasets:[
+          {label:'% выполнения',data:[periodData.rate],backgroundColor:'#378ADD'}
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,
+          scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}},
+          plugins:{legend:{display:false}}}
+      });
+    } else {
+      const labels=data.map(d=>fmtDate(d.date));
+      chartRate=new Chart(document.getElementById('chartRate'),{
+        type:'line',
+        data:{labels,datasets:[{label:'% выполнения',data:data.map(d=>d.rate),borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',fill:true,tension:0.3,pointRadius:3}]},
+        options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}},plugins:{legend:{display:false}}}
+      });
+    }
   }
 }
 
