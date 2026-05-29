@@ -3,7 +3,7 @@
 //  ThroneBaron API Proxy
 // ============================================================
 
-define('TB_API_KEY',  'ВСТАВЬТЕ_ВАШ_НОВЫЙ_КЛЮЧ_ЗДЕСЬ');
+define('TB_API_KEY',  'de4oWlnBgj8|IumZlKGCOaIrlAI36RFdcHi4BwDMsU2SpiX9pzXy0aadc85b');
 define('TB_PROJECT',  2);
 define('TB_BASE_URL', 'https://api.thronebaron.com/v1');
 
@@ -403,7 +403,31 @@ switch ($action) {
         break;
 
 
-    case 'teams':
+    case 'date_format_test':
+        $formats = [
+            'comma'      => ['date' => '2026-05-26,2026-05-29'],
+            'from_to'    => ['date_from' => '2026-05-26', 'date_to' => '2026-05-29'],
+            'start_end'  => ['start_date' => '2026-05-26', 'end_date' => '2026-05-29'],
+            'period'     => ['period' => '2026-05-26,2026-05-29'],
+            'from'       => ['from' => '2026-05-26', 'to' => '2026-05-29'],
+            'date_range' => ['date' => '2026-05-26', 'date_end' => '2026-05-29'],
+        ];
+        $out = [];
+        foreach ($formats as $name => $params) {
+            $params['project'] = TB_PROJECT;
+            $params['limit']   = 1;
+            $r = tb_get('/reports/tasks', $params);
+            $out[$name] = [
+                'params'     => $params,
+                'data_count' => count($r['data'] ?? []),
+                'has_error'  => isset($r['message']) || isset($r['error']),
+                'error'      => $r['message'] ?? $r['error'] ?? null,
+            ];
+        }
+        echo json_encode($out, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        break;
+
+
         $data = tb_get('/teams', ['project' => TB_PROJECT]);
         echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         break;
