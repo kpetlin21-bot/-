@@ -113,8 +113,8 @@
     </div>
   </div>
 
-  <div class="card collapsible" style="margin-bottom:14px;">
-    <h3 class="ch" data-target="b-shifts"><span class="chev">▾</span> Смены сегодня — приход / уход</h3>
+  <div class="card collapsible" id="card-shifts" style="margin-bottom:14px;">
+    <h3 class="ch" data-target="b-shifts"><span class="chev">▾</span> <span id="shifts-title">Смены сегодня — приход / уход</span></h3>
     <div class="cbody" id="b-shifts">
       <div class="mini" id="shift-summary"></div>
       <div style="font-size:13px; font-weight:500; color:var(--text-2); margin:6px 0 4px;"><i class="ti ti-spray"></i> Уборщицы</div>
@@ -225,9 +225,12 @@ function renderKPI(){
     {label:'Всего задач',            val:tasks,                           sub:'за период'},
     {label:'Выполнено',              val:closed,           cls:'green',   sub:'из '+tasks},
     {label:'В работе сейчас',        val:liveInProgress,   cls:liveInProgress>0?'amber':'', sub:'текущий момент'},
-    {label:'Пропущено',              val:missed,           cls:missed>0?'red':'',  sub:'за период'},
-    {label:'Не вышло на смену',      val:notCame,          cls:notCame>0?'red':'green', sub:'из '+staffTotal+' по плану'}
+    {label:'Пропущено',              val:missed,           cls:missed>0?'red':'',  sub:'за период'}
   ];
+  // Выходы на смену — это показатель конкретного дня, поэтому только для «Сегодня»/«Вчера»
+  if(isDayMode()){
+    cards.push({label:'Не вышло на смену', val:notCame, cls:notCame>0?'red':'green', sub:'из '+staffTotal+' по плану'});
+  }
   document.getElementById('kpi-grid').innerHTML=cards.map(c=>
     '<div class="kpi"><div class="kpi-label">'+c.label+'</div><div class="kpi-value '+(c.cls||'')+'">'+c.val+'</div><div class="kpi-sub">'+(c.sub||'')+'</div></div>').join('');
 }
@@ -434,6 +437,15 @@ function renderMopPdt(d){
 }
 
 function renderShifts(){
+  // Смены/выходы доступны только за конкретный день — для недели/месяца прячем блок
+  const card=document.getElementById('card-shifts');
+  if(!isDayMode()){
+    if(card) card.style.display='none';
+    return;
+  }
+  if(card) card.style.display='';
+  const titleEl=document.getElementById('shifts-title');
+  if(titleEl) titleEl.textContent='Смены ('+(period==='today'?'сегодня':'вчера')+') — приход / уход';
   const sh=liveShifts;
   const came=sh.filter(s=>s.came).length;
   const absent=sh.filter(s=>!s.came).length;
@@ -491,6 +503,11 @@ async function loadPeriod(p){
   // Проверяем кеш в памяти
   if(periodCache[cacheKey]){
     periodData=periodCache[cacheKey];
+    // Для дневных периодов восстанавливаем смены именно этого дня
+    if(isDayMode() && periodData.shifts){
+      liveShifts = periodData.shifts;
+      liveInProgress = periodData.inProgress||0;
+    }
     renderKPI(); renderCharts();
     setStatus('✓ '+periodCache[cacheKey].suffix);
     renderShifts();
@@ -530,6 +547,7 @@ async function loadPeriod(p){
       hourly: (action==='dashboard' && d.tasks.hourly) ? d.tasks.hourly : null,
       hourlyHours: (action==='dashboard' && d.tasks.hourly_hours) ? d.tasks.hourly_hours : null,
       hourlyNoTime: (action==='dashboard' && d.tasks.hourly_notime) ? d.tasks.hourly_notime : 0,
+      shifts: (action==='dashboard') ? (d.shifts||[]) : null,
     };
     periodCache[cacheKey]=periodData;
 
