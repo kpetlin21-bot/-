@@ -193,6 +193,7 @@ const PROXY='https://api.cleansyst.ru/proxy.php';
 
 // Данные по периодам — кеш в памяти
 let periodCache={}; // {key: {tasks:{...}}}
+let houseBreakdownCache={}; // {period:date: houseToday[]}
 let liveInProgress=0; // текущий «в работе» — только из сегодня
 
 function fmtDate(iso){const d=new Date(iso);return d.getDate()+'.'+(d.getMonth()+1);}
@@ -765,8 +766,22 @@ async function loadToday(){
 async function loadHouseBreakdown(){
   updateHousePeriodUI();
   const dateParam=houseDateParam();
+  const cacheKey=period+':'+dateParam;
   const timeoutMs=isPeriodRangeMode()?300000:120000;
   const tb=document.querySelector('#b-rating #house-body');
+  if(houseBreakdownCache[cacheKey] && houseBreakdownCache[cacheKey].length){
+    houseToday=houseBreakdownCache[cacheKey];
+    renderHouseTable();
+    renderPdtTable();
+    try{ renderMap(); }catch(e){ console.warn('renderMap:', e); }
+    if(selectedHouse) selectHouse(selectedHouse);
+    else if(isPeriodRangeMode()){
+      document.getElementById('house-detail').innerHTML=
+        '<div style="color:var(--text-3);font-size:13px;">Кликните по дому на карте — сводка за '+
+        (period==='7'?'неделю':'месяц')+' (сумма по дням).</div>';
+    }
+    return;
+  }
   if(tb) tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">⏳ Загрузка…</td></tr>';
   if(isPeriodRangeMode()){
     setStatus('Загрузка домов за период (сумма по дням)…');
