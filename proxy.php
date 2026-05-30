@@ -41,6 +41,20 @@ function tb_get(string $path, array $params = []): array {
 }
 
 // ============================================================
+//  Преобразовать ISO-время (UTC, c 'Z') в DateTime по Москве.
+//  Важно: используем явный часовой пояс, а НЕ ручное прибавление
+//  секунд + date(), т.к. date() зависит от часового пояса сервера
+//  (на IHC он Europe/Moscow), что давало бы двойной сдвиг.
+// ============================================================
+function msk_dt(?string $iso): ?DateTime {
+    if (empty($iso)) return null;
+    try { $d = new DateTime($iso); }
+    catch (Exception $e) { return null; }
+    $d->setTimezone(new DateTimeZone('Europe/Moscow'));
+    return $d;
+}
+
+// ============================================================
 //  Пройти все страницы пагинации и собрать все записи
 // ============================================================
 function tb_get_all(string $path, array $params = [], ?bool &$complete = null): array {
@@ -407,28 +421,25 @@ switch ($action) {
         // % как в ThroneBaron: выполнено / всего
         $rate = $totalCnt > 0 ? round($doneCnt / $totalCnt * 100) : 0;
 
-        // Почасовой разбор выполнения (started_at, UTC -> MSK +3).
-        // Считаем ВСЕ выполненные задачи (status === 'done'):
-        //   - есть started_at -> попадает в свой час; время за пределами рабочего
-        //     окна 8..20 прижимается к ближайшей границе, чтобы задача не потерялась;
-        //   - нет started_at -> учитывается отдельным счётчиком $doneNoTime.
+        // Разбор выполнения за выбранный день по 2-часовым корзинам (00:00..22:00, MSK).
+        // Учитываем ВСЕ выполненные задачи (status === 'done'):
+        //   - started_at в тот же день (MSK) -> в корзину своего 2-часового интервала;
+        //   - нет started_at ИЛИ started_at другого дня -> в счётчик $doneNoTime
+        //     (например, задачу начали накануне вечером, а закрыли сегодня —
+        //      такую нельзя ставить в час сегодняшнего дня).
         // Гарантия: sum($hourlyData) + $doneNoTime === $doneCnt.
+        $hourlyHours = array(0,2,4,6,8,10,12,14,16,18,20,22);
         $hourlyData  = array();
-        $hourlyHours = array(8,9,10,11,12,13,14,15,16,17,18,19,20);
         foreach ($hourlyHours as $hh) { $hourlyData[$hh] = 0; }
-        $hMin = $hourlyHours[0];
-        $hMax = $hourlyHours[count($hourlyHours) - 1];
         $doneNoTime = 0;
         foreach ($allTasks as $t) {
             if (($t['status'] ?? '') !== 'done') continue;
-            if (!empty($t['started_at'])) {
-                $hh = (int)date('H', strtotime($t['started_at']) + 10800);
-                if ($hh < $hMin) $hh = $hMin;
-                if ($hh > $hMax) $hh = $hMax;
-                $hourlyData[$hh]++;
-            } else {
-                $doneNoTime++;
-            }
+            $dt = msk_dt($t['started_at'] ?? null);
+            if ($dt === null) { $doneNoTime++; continue; }                 // нет времени
+            if ($dt->format('Y-m-d') !== $date) { $doneNoTime++; continue; } // другой день
+            $h = (int)$dt->format('H');
+            $bucket = $h - ($h % 2);            // 0,2,4,...,22
+            $hourlyData[$bucket]++;
         }
 
         // Смены — за ту же дату что и задачи
@@ -440,8 +451,10 @@ switch ($action) {
         foreach ($shiftsData as $s) {
             $hasStarted = !empty($s['started_at']);
             if ($hasStarted) $came++;
-            $inTime  = $hasStarted ? date('H:i', strtotime($s['started_at']) + 3*3600) : null;
-            $outTime = !empty($s['ended_at']) ? date('H:i', strtotime($s['ended_at']) + 3*3600) : null;
+            $inDt    = msk_dt($s['started_at'] ?? null);
+            $outDt   = msk_dt($s['ended_at'] ?? null);
+            $inTime  = $inDt  ? $inDt->format('H:i')  : null;
+            $outTime = $outDt ? $outDt->format('H:i') : null;
             $profile  = $s['user']['profile'] ?? [];
             $fullName = trim(($profile['last_name'] ?? '') . ' ' . ($profile['first_name'] ?? ''));
             $pos      = strtolower($profile['position'] ?? '');

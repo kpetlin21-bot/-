@@ -248,7 +248,7 @@ function renderCharts(){
     // чтобы их сумма всегда совпадала с числом выполненных в KPI.
     // Зелёная линия = нарастающий итог выполнения в % от ВСЕХ задач за день,
     // поэтому последняя точка линии совпадает с KPI «% выполнения задач».
-    const hours      = periodData.hourlyHours || [8,9,10,11,12,13,14,15,16,17,18,19,20];
+    const hours      = periodData.hourlyHours || [0,2,4,6,8,10,12,14,16,18,20,22];
     const hourly     = (periodData.hourly || hours.map(()=>0)).slice();
     const noTime     = periodData.hourlyNoTime || 0;
     const totalTasks = periodData.tasks || 0;
@@ -256,7 +256,8 @@ function renderCharts(){
 
     const labels = hours.map(x=>String(x).padStart(2,'0')+':00');
     const bars   = hourly.slice();
-    if(noTime>0){ labels.push('без\u00A0времени'); bars.push(noTime); }
+    // прочее = выполнено, но без времени этого дня (нет started_at или начато в другой день)
+    if(noTime>0){ labels.push('прочее'); bars.push(noTime); }
 
     if(doneTotal>0){
       const denom=totalTasks||1;
