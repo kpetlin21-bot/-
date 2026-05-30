@@ -50,10 +50,11 @@ function tb_get_all(string $path, array $params = [], ?bool &$complete = null): 
     $page = 0;
     $complete = true;
     while ($url && $page < 200) {  // до 50 000 задач
-        // Каждую страницу пробуем до 4 раз — сетевые таймауты не должны
-        // приводить к молчаливому обрезанию выборки.
-        $body = false;
-        for ($attempt = 0; $attempt < 4; $attempt++) {
+        // Каждую страницу пробуем до 6 раз. Повторяем как при сетевых
+        // таймаутах, так и при ответе без ключа 'data' (например, троттлинг
+        // 429 отдаёт валидный JSON без данных) — иначе выборка молча обрежется.
+        $json = null;
+        for ($attempt = 0; $attempt < 6; $attempt++) {
             $ctx = stream_context_create(['http' => [
                 'method'  => 'GET',
                 'header'  => 'Authorization: Api-Key ' . TB_API_KEY . "\r\nAccept: application/json",
@@ -61,15 +62,21 @@ function tb_get_all(string $path, array $params = [], ?bool &$complete = null): 
                 'ignore_errors' => true,
             ]]);
             $body = @file_get_contents($url, false, $ctx);
-            if ($body !== false) break;
-            usleep(300000 * ($attempt + 1)); // 0.3s, 0.6s, 0.9s
+            if ($body !== false) {
+                $decoded = json_decode($body, true);
+                if (is_array($decoded) && array_key_exists('data', $decoded)) { $json = $decoded; break; }
+                // Валидный ответ без 'data' — обычно троттлинг (429): ждём подольше
+                sleep(1 + $attempt * 2); // 1,3,5,7,9,11с
+            } else {
+                // Таймаут/обрыв соединения — уже ждали timeout, короткая пауза
+                usleep(500000 * ($attempt + 1));
+            }
         }
-        if ($body === false) { $complete = false; break; }
-        $json = json_decode($body, true);
-        if (!is_array($json) || !array_key_exists('data', $json)) { $complete = false; break; }
+        if ($json === null) { $complete = false; break; }
         $all = array_merge($all, $json['data']);
         $url = $json['next_page_url'] ?? null;
         $page++;
+        usleep(120000); // лёгкая пауза между страницами, чтобы не упираться в лимит API
     }
     // Не дошли до конца (остался next_page_url, но упёрлись в лимит страниц)
     if ($url) $complete = false;
