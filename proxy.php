@@ -178,6 +178,35 @@ function traffic_status(int $pct, int $total = -1): string {
     return 'crit';
 }
 
+/**
+ * Светофор дома «по худшему»: min(МОП%, ПДТ%) среди зон, где есть задачи (done+missed).
+ * Счётчики done/missed/total — сумма МОП+ПДТ (для «17/24» в детализации).
+ */
+function house_traffic_worst_of(int $mopDone, int $mopMiss, int $pdtDone, int $pdtMiss): array {
+    $mopTot = $mopDone + $mopMiss;
+    $pdtTot = $pdtDone + $pdtMiss;
+    $dc     = $mopDone + $pdtDone;
+    $mc     = $mopMiss + $pdtMiss;
+    $total  = $dc + $mc;
+
+    $pcts = [];
+    if ($mopTot > 0) {
+        $pcts[] = (int) round($mopDone / $mopTot * 100);
+    }
+    if ($pdtTot > 0) {
+        $pcts[] = (int) round($pdtDone / $pdtTot * 100);
+    }
+    $pct = $pcts === [] ? 100 : min($pcts);
+
+    return [
+        'done'   => $dc,
+        'missed' => $mc,
+        'total'  => $total,
+        'pct'    => $pct,
+        'status' => traffic_status($pct, $total),
+    ];
+}
+
 /** today/yesterday → Y-m-d (MSK); иначе дата как есть */
 function normalize_report_date(string $date, DateTimeZone $tz, string $todayStr): string {
     $d = strtolower(trim($date));
@@ -1081,7 +1110,7 @@ switch ($action) {
         set_time_limit($isRange ? 600 : 300);
 
         $cacheFile = sys_get_temp_dir() . '/'
-            . ($isRange ? 'tb_hbp_' : 'tb_hb_') . TB_PROJECT . '_'
+            . ($isRange ? 'tb_hbp_w_' : 'tb_hb_w_') . TB_PROJECT . '_'
             . ($isRange ? md5($date) : $date) . '.json';
         $cacheTtl = $isRange ? 3900 : 900;
 
@@ -1127,18 +1156,13 @@ switch ($action) {
                 $pdtMiss = $pdt['missed'];
             }
 
-            // Светофор дома = МОП + ПДТ вместе
-            $dc = $mopDone + $pdtDone;
-            $mc = $mopMiss + $pdtMiss;
-            $total = $dc + $mc;
-            $rate  = $total > 0 ? round($dc/$total*100) : 100; // нет задач = 100%
-            $status = traffic_status($rate, $total);
-
-            $mopTot = $mopDone + $mopMiss;
-            $pdtTot = $pdtDone + $pdtMiss;
+            $traffic = house_traffic_worst_of($mopDone, $mopMiss, $pdtDone, $pdtMiss);
+            $mopTot  = $mopDone + $mopMiss;
+            $pdtTot  = $pdtDone + $pdtMiss;
             $houses[] = [
                 'id'=>$houseId,'label'=>$locName,'locationId'=>$locId,
-                'done'=>$dc,'missed'=>$mc,'total'=>$total,'pct'=>$rate,'status'=>$status,
+                'done'=>$traffic['done'],'missed'=>$traffic['missed'],'total'=>$traffic['total'],
+                'pct'=>$traffic['pct'],'status'=>$traffic['status'],
                 'mop'=>['done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0],
                 'pdt'=>['done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,'yardId'=>$yardId],
             ];
@@ -1213,14 +1237,15 @@ switch ($action) {
             }
         }
 
-        $houseDone = $mopDone + $pdtDone;
-        $houseMiss = $mopMiss + $pdtMiss;
-        $houseTot  = $houseDone + $houseMiss;
+        $traffic = house_traffic_worst_of($mopDone, $mopMiss, $pdtDone, $pdtMiss);
 
         echo json_encode([
             'date'   => $date,
             'locId'  => $locId,
-            'total'  => ['done'=>$houseDone,'missed'=>$houseMiss,'total'=>$houseTot],
+            'total'  => [
+                'done'=>$traffic['done'], 'missed'=>$traffic['missed'], 'total'=>$traffic['total'],
+                'pct'=>$traffic['pct'], 'status'=>$traffic['status'],
+            ],
             'mop'    => $mopOut,
             'pdt'    => [
                 'done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,

@@ -136,6 +136,7 @@
           </svg>
         </div>
         <div class="legend">
+          <span style="width:100%;margin-bottom:2px;color:var(--text-3);">Цвет дома — по худшему из МОП и ПДТ (где есть задачи)</span>
           <span><span class="dot" style="background:#97C459"></span> 100%</span>
           <span><span class="dot" style="background:#EF9F27"></span> 80–99%</span>
           <span><span class="dot" style="background:#E24B4A"></span> ≤79%</span>
@@ -730,10 +731,42 @@ async function loadHouseDetail(locationId, houseLabel){
     area.innerHTML = renderMopPdt(d);
     // Обновляем шапку детализации свежими данными (house_breakdown может быть закеширован)
     updateDetailHeader(d);
+    syncHouseMapFromDetail(d, locationId);
   }catch(e){
     if(area) area.innerHTML='<div style="color:var(--text-3);font-size:13px;">Не удалось загрузить детализацию.</div>';
     console.warn('house_detail:', e);
   }
+}
+
+/** Светофор дома: min(МОП%, ПДТ%) по зонам с задачами; счётчики — сумма МОП+ПДТ */
+function houseTrafficWorstOf(d){
+  const mop=d.mop||{};
+  const pdt=d.pdt||{};
+  const t=d.total||{};
+  const mopTot=mop.total!=null?mop.total:((mop.done||0)+(mop.missed||0));
+  const pdtTot=pdt.total!=null?pdt.total:((pdt.done||0)+(pdt.missed||0));
+  const pcts=[];
+  if(mopTot>0) pcts.push(mop.pct!=null?mop.pct:Math.round((mop.done||0)/mopTot*100));
+  if(pdtTot>0) pcts.push(pdt.pct!=null?pdt.pct:Math.round((pdt.done||0)/pdtTot*100));
+  const done=t.done!=null?t.done:((mop.done||0)+(pdt.done||0));
+  const total=t.total!=null?t.total:(done+(t.missed!=null?t.missed:((mop.missed||0)+(pdt.missed||0))));
+  const pct=t.pct!=null?t.pct:(pcts.length?Math.min(...pcts):(total>0?Math.round(done/total*100):100));
+  const status=t.status||trafficLevel(pct,total);
+  return {done,total,pct,status};
+}
+
+function syncHouseMapFromDetail(d, locationId){
+  if(isPeriodRangeMode()||!selectedHouse) return;
+  const st=houseTrafficWorstOf(d);
+  const idx=houseToday.findIndex(h=>h.id===selectedHouse||h.locationId===locationId);
+  if(idx<0) return;
+  const h=houseToday[idx];
+  houseToday[idx]={
+    ...h, pct:st.pct, status:st.status, tasks:st.total, closed:st.done,
+    mop:d.mop||h.mop, pdt:d.pdt||h.pdt,
+  };
+  renderMap();
+  renderHouseTable();
 }
 
 function updateDetailHeader(d){
@@ -742,15 +775,13 @@ function updateDetailHeader(d){
   const pillEl=det.querySelector('.pill');
   const countEl=det.querySelector('.detail-count');
   if(!pillEl && !countEl) return;
-  const t=d.total;
-  const pct = t.total>0 ? Math.round(t.done/t.total*100) : 100;
-  const status = trafficLevel(pct, t.total);
-  const stLabel = status==='ok'?'Выполнено':(status==='warn'?'Есть просрочки':'Критично');
-  const barColor = statusColor(status);
-  if(pillEl){ pillEl.className='pill '+status; pillEl.textContent=stLabel; }
-  if(countEl){ countEl.innerHTML=t.done+'/'+t.total+' задач · <b style="color:'+barColor+'">'+pct+'%</b>'; }
+  const st=houseTrafficWorstOf(d);
+  const stLabel=st.status==='ok'?'Выполнено':(st.status==='warn'?'Есть просрочки':'Критично');
+  const barColor=statusColor(st.status);
+  if(pillEl){ pillEl.className='pill '+st.status; pillEl.textContent=stLabel; }
+  if(countEl){ countEl.innerHTML=st.done+'/'+st.total+' задач · <b style="color:'+barColor+'">'+st.pct+'%</b>'; }
   const barEl=det.querySelector('.detail-bar-fill');
-  if(barEl){ barEl.style.width=pct+'%'; barEl.style.background=barColor; }
+  if(barEl){ barEl.style.width=st.pct+'%'; barEl.style.background=barColor; }
 }
 
 function escHtml(s){
