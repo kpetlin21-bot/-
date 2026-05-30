@@ -43,26 +43,36 @@ function tb_get(string $path, array $params = []): array {
 // ============================================================
 //  Пройти все страницы пагинации и собрать все записи
 // ============================================================
-function tb_get_all(string $path, array $params = []): array {
+function tb_get_all(string $path, array $params = [], ?bool &$complete = null): array {
     $all = [];
-    $params['limit'] = 250;  // максимум на страницу — 25000 задач за месяц
+    $params['limit'] = 250;  // максимум на страницу
     $url = TB_BASE_URL . $path . '?' . http_build_query($params);
     $page = 0;
-    while ($url && $page < 100) {  // до 25 000 задач
-        $ctx = stream_context_create(['http' => [
-            'method'  => 'GET',
-            'header'  => 'Authorization: Api-Key ' . TB_API_KEY . "\r\nAccept: application/json",
-            'timeout' => 15,
-            'ignore_errors' => true,
-        ]]);
-        $body = @file_get_contents($url, false, $ctx);
-        if ($body === false) break;
+    $complete = true;
+    while ($url && $page < 200) {  // до 50 000 задач
+        // Каждую страницу пробуем до 4 раз — сетевые таймауты не должны
+        // приводить к молчаливому обрезанию выборки.
+        $body = false;
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $ctx = stream_context_create(['http' => [
+                'method'  => 'GET',
+                'header'  => 'Authorization: Api-Key ' . TB_API_KEY . "\r\nAccept: application/json",
+                'timeout' => 25,
+                'ignore_errors' => true,
+            ]]);
+            $body = @file_get_contents($url, false, $ctx);
+            if ($body !== false) break;
+            usleep(300000 * ($attempt + 1)); // 0.3s, 0.6s, 0.9s
+        }
+        if ($body === false) { $complete = false; break; }
         $json = json_decode($body, true);
-        if (!isset($json['data'])) break;
+        if (!is_array($json) || !array_key_exists('data', $json)) { $complete = false; break; }
         $all = array_merge($all, $json['data']);
         $url = $json['next_page_url'] ?? null;
         $page++;
     }
+    // Не дошли до конца (остался next_page_url, но упёрлись в лимит страниц)
+    if ($url) $complete = false;
     return $all;
 }
 
@@ -188,7 +198,8 @@ switch ($action) {
             break;
         }
 
-        $allTasks = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT]);
+        $complete = true;
+        $allTasks = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT], $complete);
         $totalCnt = count($allTasks);
         $doneCnt = 0; $inProgressCnt = 0; $missedCnt = 0;
         foreach ($allTasks as $t) {
@@ -199,14 +210,69 @@ switch ($action) {
         }
         $rate = $totalCnt > 0 ? round($doneCnt / $totalCnt * 100) : 0;
 
+        header('X-Complete: ' . ($complete ? '1' : '0'));
         $result = json_encode([
             'date'  => $date,
             'tasks' => ['total'=>$totalCnt,'done'=>$doneCnt,'in_progress'=>$inProgressCnt,'missed'=>$missedCnt,'rate'=>$rate],
         ], JSON_UNESCAPED_UNICODE);
 
-        // Кешируем только если есть данные
-        if ($totalCnt > 0) { file_put_contents($cacheFile, $result); }
+        // Кешируем только полную выборку с данными — иначе можно «заморозить»
+        // обрезанный частичный ответ на весь TTL.
+        if ($complete && $totalCnt > 0) { file_put_contents($cacheFile, $result); }
         echo $result;
+        break;
+
+    // ----------------------------------------------------------
+    //  История выполнения по дням (замена облачным снимкам).
+    //  Строится прямо из ThroneBaron: по дню считаем total/done/missed/rate.
+    //  Прошедшие дни кешируются надолго (сутки), сегодня — на 15 минут,
+    //  поэтому повторные запросы быстрые.
+    //  ?action=history&days=30
+    // ----------------------------------------------------------
+    case 'history':
+        set_time_limit(180);
+        $tz       = new DateTimeZone('Europe/Moscow');
+        $now      = new DateTime('now', $tz);
+        $todayStr = $now->format('Y-m-d');
+        $days     = (int)($_GET['days'] ?? 30);
+        if ($days < 1)  $days = 30;
+        if ($days > 60) $days = 60;
+
+        $out = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $d = (clone $now)->modify("-{$i} day")->format('Y-m-d');
+            $isToday   = ($d === $todayStr);
+            $dayCache  = sys_get_temp_dir() . '/tb_day_' . TB_PROJECT . '_' . $d . '.json';
+            $ttl       = $isToday ? 900 : 86400;
+
+            $rec = null;
+            if (file_exists($dayCache) && (time() - filemtime($dayCache)) < $ttl) {
+                $rec = json_decode(file_get_contents($dayCache), true);
+            }
+            if ($rec === null) {
+                $complete = true;
+                $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => TB_PROJECT], $complete);
+                $tot = count($tasks); $dn = 0; $ms = 0;
+                foreach ($tasks as $t) {
+                    $st = $t['status'] ?? '';
+                    if      ($st === 'done')   $dn++;
+                    elseif  ($st === 'missed') $ms++;
+                }
+                $rec = [
+                    'date'   => $d,
+                    'tasks'  => $tot,
+                    'closed' => $dn,
+                    'missed' => $ms,
+                    'rate'   => $tot > 0 ? round($dn / $tot * 100) : 0,
+                ];
+                // Кешируем день только при полной выборке
+                if ($complete && $tot > 0) file_put_contents($dayCache, json_encode($rec));
+            }
+            // Пропускаем дни без задач (выходные/нет плана) — не засоряют график
+            if (($rec['tasks'] ?? 0) > 0) $out[] = $rec;
+        }
+
+        echo json_encode(['days' => $days, 'history' => $out], JSON_UNESCAPED_UNICODE);
         break;
 
 
@@ -216,16 +282,18 @@ switch ($action) {
         $date = $_GET['date'] ?? $now->format('Y-m-d');
 
         // Все задачи за дату без фильтра статуса — даёт точный total
-        $allTasks  = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT]);
+        $complete  = true;
+        $allTasks  = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT], $complete);
 
         // Если сегодня ещё нет задач (утро) — берём вчера
         $isYesterday = false;
         if (empty($allTasks) && !isset($_GET['date'])) {
             $yesterday = (new DateTime('now', $tz))->modify('-1 day')->format('Y-m-d');
-            $allTasks  = tb_get_all('/reports/tasks', ['date' => $yesterday, 'project' => TB_PROJECT]);
+            $allTasks  = tb_get_all('/reports/tasks', ['date' => $yesterday, 'project' => TB_PROJECT], $complete);
             $date      = $yesterday;
             $isYesterday = true;
         }
+        header('X-Complete: ' . ($complete ? '1' : '0'));
 
         // Подсчёт по статусам (как в ThroneBaron)
         // done       = выполнено
@@ -250,14 +318,27 @@ switch ($action) {
         // % как в ThroneBaron: выполнено / всего
         $rate = $totalCnt > 0 ? round($doneCnt / $totalCnt * 100) : 0;
 
-        // Почасовой разбор: реальное время выполнения из started_at (UTC -> MSK +3)
+        // Почасовой разбор выполнения (started_at, UTC -> MSK +3).
+        // Считаем ВСЕ выполненные задачи (status === 'done'):
+        //   - есть started_at -> попадает в свой час; время за пределами рабочего
+        //     окна 8..20 прижимается к ближайшей границе, чтобы задача не потерялась;
+        //   - нет started_at -> учитывается отдельным счётчиком $doneNoTime.
+        // Гарантия: sum($hourlyData) + $doneNoTime === $doneCnt.
         $hourlyData  = array();
         $hourlyHours = array(8,9,10,11,12,13,14,15,16,17,18,19,20);
         foreach ($hourlyHours as $hh) { $hourlyData[$hh] = 0; }
+        $hMin = $hourlyHours[0];
+        $hMax = $hourlyHours[count($hourlyHours) - 1];
+        $doneNoTime = 0;
         foreach ($allTasks as $t) {
-            if (isset($t['status']) && $t['status'] === 'done' && !empty($t['started_at'])) {
+            if (($t['status'] ?? '') !== 'done') continue;
+            if (!empty($t['started_at'])) {
                 $hh = (int)date('H', strtotime($t['started_at']) + 10800);
-                if ($hh >= 8 && $hh <= 20) { $hourlyData[$hh]++; }
+                if ($hh < $hMin) $hh = $hMin;
+                if ($hh > $hMax) $hh = $hMax;
+                $hourlyData[$hh]++;
+            } else {
+                $doneNoTime++;
             }
         }
 
@@ -299,8 +380,9 @@ switch ($action) {
                 'available'   => $availableCnt,
                 'pending'     => $pendingCnt,
                 'rate'        => $rate,
-                'hourly'       => array_values($hourlyData),
-                'hourly_hours' => $hourlyHours,
+                'hourly'        => array_values($hourlyData),
+                'hourly_hours'  => $hourlyHours,
+                'hourly_notime' => $doneNoTime,
             ],
             'staff'  => ['total' => $staffTotal, 'came' => $came, 'absent' => $staffTotal - $came],
             'shifts' => $shiftsFormatted,
