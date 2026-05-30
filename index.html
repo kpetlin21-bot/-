@@ -153,11 +153,11 @@
   </div>
 
   <div class="card collapsible">
-    <h3 class="ch" data-target="b-rating"><span class="chev">▾</span> Рейтинг домов (сегодня)</h3>
+    <h3 class="ch" data-target="b-rating"><span class="chev">▾</span> <span id="house-rating-title">Рейтинг домов (сегодня)</span></h3>
     <div class="cbody" id="b-rating">
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Дом</th><th>Задач на день</th><th>Закрыто</th><th>Выполнение</th></tr></thead>
+          <thead><tr><th>Дом</th><th id="house-col-tasks">Задач на день</th><th>Закрыто</th><th>Выполнение</th></tr></thead>
           <tbody id="house-body"></tbody>
         </table>
       </div>
@@ -165,11 +165,11 @@
   </div>
 
   <div class="card collapsible">
-    <h3 class="ch" data-target="b-pdt"><span class="chev">▾</span> ПДТ — придомовая территория по дворам (сегодня)</h3>
+    <h3 class="ch" data-target="b-pdt"><span class="chev">▾</span> <span id="house-pdt-title">ПДТ — придомовая территория по дворам (сегодня)</span></h3>
     <div class="cbody" id="b-pdt">
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Адрес (двор)</th><th>Задач на день</th><th>Закрыто</th><th>Выполнение</th></tr></thead>
+          <thead><tr><th>Адрес (двор)</th><th id="pdt-col-tasks">Задач на день</th><th>Закрыто</th><th>Выполнение</th></tr></thead>
           <tbody id="pdt-body"></tbody>
         </table>
       </div>
@@ -197,6 +197,28 @@ let liveInProgress=0; // текущий «в работе» — только и�
 
 function fmtDate(iso){const d=new Date(iso);return d.getDate()+'.'+(d.getMonth()+1);}
 function isDayMode(){return period==='today'||period==='yesterday';}
+function isPeriodRangeMode(){return period==='7'||period==='30';}
+function houseDateParam(){return getDateParam(period);}
+
+function updateHousePeriodUI(){
+  const col=document.getElementById('house-col-tasks');
+  const pcol=document.getElementById('pdt-col-tasks');
+  const rt=document.getElementById('house-rating-title');
+  const pt=document.getElementById('house-pdt-title');
+  if(isPeriodRangeMode()){
+    const lbl=period==='7'?'неделя':'месяц';
+    if(col) col.textContent='Задач за период';
+    if(pcol) pcol.textContent='Задач за период';
+    if(rt) rt.textContent='Рейтинг домов ('+lbl+', сумма по дням)';
+    if(pt) pt.textContent='ПДТ по дворам ('+lbl+', сумма по дням)';
+  }else if(isDayMode()){
+    const lbl=period==='today'?'сегодня':'вчера';
+    if(col) col.textContent='Задач на день';
+    if(pcol) pcol.textContent='Задач на день';
+    if(rt) rt.textContent='Рейтинг домов ('+lbl+')';
+    if(pt) pt.textContent='ПДТ — придомовая территория по дворам ('+lbl+')';
+  }
+}
 
 // Дата «сегодня» в MSK (как в proxy.php)
 function mskToday(){ return getDateParam('today'); }
@@ -405,6 +427,25 @@ function renderMap(){
   });
 }
 
+function renderHouseDetailHeader(h, geo){
+  const stLabel=h.status==='ok'?'Выполнено':(h.status==='warn'?'Есть просрочки':'Критично');
+  const stCls=h.status==='ok'?'ok':(h.status==='warn'?'warn':'crit');
+  const barColor=trafficColor(h.pct,h.tasks);
+  const periodNote=isPeriodRangeMode()
+    ? '<div style="font-size:12px;color:var(--text-3);margin-top:6px;">'+
+        (period==='7'?'За неделю':'За месяц')+' · сумма по дням (МОП + ПДТ)</div>'
+    : '';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'+
+      '<span class="pill '+stCls+'">'+stLabel+'</span>'+
+      '<span class="detail-count" style="font-size:13px;color:var(--text-2);">'+
+        '<b>'+h.closed+'</b> выполнено · <b>'+h.tasks+'</b> всего задач · '+
+        '<b style="color:'+barColor+'">'+h.pct+'%</b></span>'+
+    '</div>'+
+    '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:8px;">'+
+      '<div class="detail-bar-fill" style="height:100%;width:'+h.pct+'%;background:'+barColor+';border-radius:3px;"></div>'+
+    '</div>'+periodNote;
+}
+
 function selectHouse(id){
   selectedHouse=id; renderMap();
   const h=houseToday.find(x=>x.id===id);
@@ -417,26 +458,23 @@ function selectHouse(id){
     return;
   }
 
-  const stLabel=h.status==='ok'?'Выполнено':(h.status==='warn'?'Есть просрочки':'Критично');
-  const stCls=h.status==='ok'?'ok':(h.status==='warn'?'warn':'crit');
-  const barColor=statusColor(h.status);
+  if(isPeriodRangeMode()){
+    det.innerHTML=renderHouseDetailHeader(h, geo)+
+      '<div style="font-size:12px;color:var(--text-3);margin-top:12px;">'+
+        'Поминутная детализация МОП/ПДТ доступна для периодов «Сегодня» и «Вчера».'+
+      '</div>';
+    return;
+  }
 
-  det.innerHTML=
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'+
-      '<span class="pill '+stCls+'">'+stLabel+'</span>'+
-      '<span class="detail-count" style="font-size:13px;color:var(--text-2);">'+h.closed+'/'+h.tasks+' задач · <b style="color:'+barColor+'">'+h.pct+'%</b></span>'+
-    '</div>'+
-    '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:16px;">'+
-      '<div class="detail-bar-fill" style="height:100%;width:'+h.pct+'%;background:'+barColor+';border-radius:3px;"></div>'+
-    '</div>'+
+  det.innerHTML=renderHouseDetailHeader(h, geo)+
     '<div id="mop-pdt-area"><div style="color:var(--text-3);font-size:13px;">⏳ Загружаю МОП и ПДТ…</div></div>';
 
-  // Загружаем детализацию МОП/ПДТ
   if(h.locationId) loadHouseDetail(h.locationId, h.label);
 }
 
 async function loadHouseDetail(locationId, houseLabel){
-  const dateParam=(period==='today'||period==='yesterday')?getDateParam(period):mskToday();
+  if(isPeriodRangeMode()) return;
+  const dateParam=houseDateParam();
   const area=document.getElementById('mop-pdt-area');
   if(!area) return;
   try{
@@ -644,7 +682,8 @@ document.getElementById('period-seg').addEventListener('click',e=>{
   period=b.dataset.p;
   document.querySelectorAll('#period-seg button').forEach(x=>x.classList.toggle('active',x===b));
   loadPeriod(period);
-  if(period==='today'||period==='yesterday') loadHouseBreakdown();
+  updateHousePeriodUI();
+  if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
 });
 
 // Загружаем данные за произвольный период
@@ -667,7 +706,7 @@ async function loadPeriod(p){
     renderKPI(); renderCharts();
     setStatus('✓ '+periodCache[cacheKey].suffix);
     renderShifts();
-    if(p==='today'||p==='yesterday') loadHouseBreakdown();
+    if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
     return;
   }
 
@@ -714,7 +753,8 @@ async function loadPeriod(p){
     console.error('loadPeriod:', e);
   }
   renderShifts();
-  if(p==='today'||p==='yesterday') loadHouseBreakdown();
+  updateHousePeriodUI();
+  if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
 }
 async function loadToday(){
   await loadPeriod('today');
@@ -723,13 +763,21 @@ async function loadToday(){
 
 // Загрузка детализации по домам (может занять 10-20 сек — много API-вызовов)
 async function loadHouseBreakdown(){
-  const dateParam=(period==='today'||period==='yesterday')?getDateParam(period):mskToday();
+  updateHousePeriodUI();
+  const dateParam=houseDateParam();
+  const timeoutMs=isPeriodRangeMode()?300000:120000;
   const tb=document.querySelector('#b-rating #house-body');
   if(tb) tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">⏳ Загрузка…</td></tr>';
+  if(isPeriodRangeMode()){
+    setStatus('Загрузка домов за период (сумма по дням)…');
+    renderMap();
+  }
   try{
-    document.getElementById('house-detail').innerHTML=
-      '<div style="color:var(--text-3);font-size:13px;">⏳ Загрузка детализации по домам…</div>';
-    const r=await fetchWithTimeout(PROXY+'?action=house_breakdown&date='+encodeURIComponent(dateParam), 120000);
+    if(!selectedHouse || !houseToday.find(x=>x.id===selectedHouse)){
+      document.getElementById('house-detail').innerHTML=
+        '<div style="color:var(--text-3);font-size:13px;">⏳ Загрузка статистики по домам…</div>';
+    }
+    const r=await fetchWithTimeout(PROXY+'?action=house_breakdown&date='+encodeURIComponent(dateParam), timeoutMs);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     if(d.houses && d.houses.length){
@@ -744,25 +792,31 @@ async function loadHouseBreakdown(){
         mop: h.mop,
         pdt: h.pdt,
       }));
+      houseBreakdownCache[cacheKey]=houseToday;
       renderHouseTable();
       renderPdtTable();
       try{ renderMap(); }catch(e){ console.warn('renderMap:', e); }
+      if(isPeriodRangeMode()) setStatus('✓ Дома за период · сумма по дням');
       if(selectedHouse){
         selectHouse(selectedHouse);
       } else {
         document.getElementById('house-detail').innerHTML=
-          '<div style="color:var(--text-3);font-size:13px;">Кликните по дому на карте, чтобы увидеть детали.</div>';
+          '<div style="color:var(--text-3);font-size:13px;">Кликните по дому на карте — сводка за '+
+          (period==='7'?'неделю':'месяц')+' (сумма по дням).</div>';
       }
     } else if(tb) {
       houseToday=[];
+      renderMap();
       tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">Нет задач по домам за '+dateParam+'</td></tr>';
       renderPdtTable();
     }
   }catch(e){
     console.warn('house_breakdown:', e);
     if(tb) tb.innerHTML='<tr><td colspan="4" style="color:var(--red);text-align:center;padding:16px;">Не удалось загрузить рейтинг домов</td></tr>';
+    houseToday=[]; renderMap();
     document.getElementById('house-detail').innerHTML=
-      '<div style="color:var(--text-3);font-size:13px;">Не удалось загрузить детализацию по домам.</div>';
+      '<div style="color:var(--text-3);font-size:13px;">Не удалось загрузить статистику по домам.</div>';
+    setStatus('⚠ Ошибка загрузки домов');
   }
 }
 
@@ -803,6 +857,7 @@ document.getElementById('house-detail').addEventListener('click',e=>{
 });
 
 // Сначала рисуем пустой дашборд, затем грузим данные
+updateHousePeriodUI();
 renderAll();
 loadToday();
 loadHistory();

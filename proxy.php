@@ -190,6 +190,76 @@ function normalize_report_date(string $date, DateTimeZone $tz, string $todayStr)
     return $date;
 }
 
+/** done/missed/total за диапазон дат по локации (сумма по дням) */
+function location_period_counts(string $dateRange, int $locId): array {
+    $complete = true;
+    $all      = tb_get_all('/reports/tasks', [
+        'date'     => $dateRange,
+        'project'  => TB_PROJECT,
+        'location' => $locId . '*',
+    ], $complete);
+    $done = 0;
+    $missed = 0;
+    foreach ($all as $t) {
+        $st = $t['status'] ?? '';
+        if ($st === 'done') {
+            $done++;
+        } elseif ($st === 'missed') {
+            $missed++;
+        }
+    }
+    $total = $done + $missed;
+    return [
+        'done'     => $done,
+        'missed'   => $missed,
+        'total'    => $total,
+        'pct'      => $total > 0 ? round($done / $total * 100) : 0,
+        'complete' => $complete,
+    ];
+}
+
+/** МОП за период (неделя/месяц) — сумма по секциям */
+function mop_stats_for_house_period(int $houseLocId, string $dateRange, array $allLocs): array {
+    $sections = array_values(array_filter($allLocs, function ($l) use ($houseLocId) {
+        return (int)$l['parent_id'] === $houseLocId;
+    }));
+
+    $mopDone = 0;
+    $mopMiss = 0;
+    $zones   = [];
+
+    if ($sections) {
+        foreach ($sections as $sec) {
+            $sid    = (int)$sec['id'];
+            $bundle = location_period_counts($dateRange, $sid);
+            $d      = $bundle['done'];
+            $m      = $bundle['missed'];
+            $mopDone += $d;
+            $mopMiss += $m;
+            $zones[] = [
+                'name' => $sec['name'], 'id' => $sid,
+                'done' => $d, 'missed' => $m, 'total' => $bundle['total'],
+                'pct'  => $bundle['pct'],
+            ];
+        }
+    } else {
+        $bundle  = location_period_counts($dateRange, $houseLocId);
+        $mopDone = $bundle['done'];
+        $mopMiss = $bundle['missed'];
+    }
+
+    return ['done' => $mopDone, 'missed' => $mopMiss, 'zones' => $zones];
+}
+
+/** ПДТ за период */
+function pdt_stats_for_yard_period(?int $yardId, string $dateRange): array {
+    if ($yardId === null) {
+        return ['done' => 0, 'missed' => 0];
+    }
+    $c = location_period_counts($dateRange, $yardId);
+    return ['done' => $c['done'], 'missed' => $c['missed']];
+}
+
 /** Задачи по локации (поддерево location=id*) */
 function count_location_tasks(string $date, int $locId, string $status): int {
     $r = tb_get('/reports/tasks', [
@@ -711,11 +781,17 @@ switch ($action) {
     //  ?action=house_breakdown&date=2026-05-29
     // ----------------------------------------------------------
     case 'house_breakdown':
-        set_time_limit(300);
-        $date = normalize_report_date($_GET['date'] ?? $today, $tz_msk, $today);
-        $cacheFile = sys_get_temp_dir() . '/tb_hb_' . TB_PROJECT . '_' . $date . '.json';
+        $rawDate = $_GET['date'] ?? $today;
+        $isRange = (strpos($rawDate, ',') !== false);
+        $date    = $isRange ? $rawDate : normalize_report_date($rawDate, $tz_msk, $today);
+        set_time_limit($isRange ? 600 : 300);
 
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
+        $cacheFile = sys_get_temp_dir() . '/'
+            . ($isRange ? 'tb_hbp_' : 'tb_hb_') . TB_PROJECT . '_'
+            . ($isRange ? md5($date) : $date) . '.json';
+        $cacheTtl = $isRange ? 3900 : 900;
+
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtl) {
             header('X-Cache: HIT');
             echo file_get_contents($cacheFile);
             break;
@@ -739,14 +815,23 @@ switch ($action) {
             $parts   = explode(' ', trim($locName), 2);
             $houseId = count($parts) > 1 ? $parts[1] : $locName;
 
-            // МОП — по секциям (как house_detail); ПДТ — двор из «Территории»
-            $mop       = mop_stats_for_house((int)$locId, $date, $allLocs);
-            $mopDone   = $mop['done'];
-            $mopMiss   = $mop['missed'];
-            $yardId    = $yardMap[$houseId] ?? null;
-            $pdt       = pdt_stats_for_yard($yardId !== null ? (int)$yardId : null, $date);
-            $pdtDone   = $pdt['done'];
-            $pdtMiss   = $pdt['missed'];
+            if ($isRange) {
+                $mop     = mop_stats_for_house_period((int)$locId, $date, $allLocs);
+                $mopDone = $mop['done'];
+                $mopMiss = $mop['missed'];
+                $yardId  = $yardMap[$houseId] ?? null;
+                $pdt     = pdt_stats_for_yard_period($yardId !== null ? (int)$yardId : null, $date);
+                $pdtDone = $pdt['done'];
+                $pdtMiss = $pdt['missed'];
+            } else {
+                $mop     = mop_stats_for_house((int)$locId, $date, $allLocs);
+                $mopDone = $mop['done'];
+                $mopMiss = $mop['missed'];
+                $yardId  = $yardMap[$houseId] ?? null;
+                $pdt     = pdt_stats_for_yard($yardId !== null ? (int)$yardId : null, $date);
+                $pdtDone = $pdt['done'];
+                $pdtMiss = $pdt['missed'];
+            }
 
             // Светофор дома = МОП + ПДТ вместе
             $dc = $mopDone + $pdtDone;
@@ -766,7 +851,16 @@ switch ($action) {
         }
 
         usort($houses, function($a,$b){ return $a['pct'] - $b['pct']; });
-        $result = json_encode(['date'=>$date,'houses'=>$houses,'cached'=>false], JSON_UNESCAPED_UNICODE);
+        $parts = explode(',', $date);
+        $result = json_encode([
+            'date'        => $date,
+            'dateFrom'    => $parts[0] ?? $date,
+            'dateTo'      => $parts[1] ?? ($parts[0] ?? $date),
+            'periodRange' => $isRange,
+            'periodLabel' => $isRange ? 'сумма по дням' : null,
+            'houses'      => $houses,
+            'cached'      => false,
+        ], JSON_UNESCAPED_UNICODE);
         file_put_contents($cacheFile, $result);
         echo $result;
         break;
