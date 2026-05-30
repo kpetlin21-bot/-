@@ -410,19 +410,56 @@ function task_breakdown_group_statuses(string $group): array {
     }
 }
 
-/** Число задач по локации и одному или нескольким статусам (полная пагинация) */
+/** Все задачи проекта за день и статус (кеш 15 мин — для KPI breakdown) */
+function get_project_tasks_by_status(string $date, string $status): array {
+    $cacheFile = sys_get_temp_dir() . '/tb_st_' . TB_PROJECT . '_' . $date . '_' . $status . '.json';
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
+        $data = json_decode(file_get_contents($cacheFile), true);
+        return is_array($data) ? $data : [];
+    }
+    $complete = true;
+    $all = tb_get_all('/reports/tasks', [
+        'date'    => $date,
+        'project' => TB_PROJECT,
+        'status'  => $status,
+    ], $complete);
+    if ($complete && !empty($all)) {
+        file_put_contents($cacheFile, json_encode($all));
+    }
+    return $all;
+}
+
+/** Число задач по локации и статусам (быстро: одна страница; при 250+ — полная пагинация) */
 function count_location_tasks_statuses(string $date, int $locId, array $statuses): int {
+    static $mem = [];
+    $key = $date . ':' . $locId . ':' . implode(',', $statuses);
+    if (isset($mem[$key])) {
+        return $mem[$key];
+    }
     $n = 0;
     foreach ($statuses as $st) {
-        $complete = true;
-        $all = tb_get_all('/reports/tasks', [
+        $r = tb_get('/reports/tasks', [
             'date'     => $date,
             'project'  => TB_PROJECT,
             'status'   => $st,
             'location' => $locId . '*',
-        ], $complete);
-        $n += count($all);
+            'limit'    => 250,
+        ]);
+        $chunk = $r['data'] ?? [];
+        $cnt   = count($chunk);
+        if ($cnt >= 250) {
+            $complete = true;
+            $all = tb_get_all('/reports/tasks', [
+                'date'     => $date,
+                'project'  => TB_PROJECT,
+                'status'   => $st,
+                'location' => $locId . '*',
+            ], $complete);
+            $cnt = count($all);
+        }
+        $n += $cnt;
     }
+    $mem[$key] = $n;
     return $n;
 }
 
@@ -760,9 +797,16 @@ switch ($action) {
             }
         }
 
+        // Прогрев кеша задач по статусам (ускоряет KPI → детализация)
+        $statusWarm = [];
+        foreach (['available', 'pending', 'in_progress', 'missed'] as $st) {
+            $statusWarm[$st] = count(get_project_tasks_by_status($todayStr, $st));
+        }
+
         echo json_encode([
             'warmed'              => $report,
             'history_days_warmed' => $histWarmed,
+            'status_tasks_today'  => $statusWarm,
             'ts'                  => $now->format('Y-m-d H:i:s'),
         ], JSON_UNESCAPED_UNICODE);
         break;
@@ -910,6 +954,19 @@ switch ($action) {
             break;
         }
 
+        $houseLocExpand = (int)($_GET['house_location_id'] ?? 0);
+        if ($houseLocExpand > 0 && ($_GET['expand'] ?? '') === 'zones') {
+            $allLocs = get_all_locations();
+            $mopB    = mop_breakdown_for_house($houseLocExpand, $date, $allLocs, $statuses, false);
+            echo json_encode([
+                'date'             => $date,
+                'status'           => $group,
+                'houseLocationId'=> $houseLocExpand,
+                'mop'              => $mopB,
+            ], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+
         set_time_limit(300);
         $cacheFile = sys_get_temp_dir() . '/tb_tbd_' . TB_PROJECT . '_'
             . md5($date . '_' . $group) . '.json';
@@ -941,8 +998,14 @@ switch ($action) {
             $houseId = count($parts) > 1 ? $parts[1] : $locName;
             $yardId  = $yardMap[$houseId] ?? null;
 
-            $mopB    = mop_breakdown_for_house((int)$locId, $date, $allLocs, $statuses, false);
-            $mopCnt  = $mopB['count'];
+            // Счёт по всему дому (location=id*), без запроса по каждой секции
+            $mopCnt  = count_location_tasks_statuses($date, (int)$locId, $statuses);
+            $sections = array_values(array_filter($allLocs, function ($l) use ($locId) {
+                return (int)$l['parent_id'] === (int)$locId;
+            }));
+            $mopZones = array_map(function ($sec) {
+                return ['name' => $sec['name'], 'id' => (int)$sec['id'], 'lazy' => true];
+            }, $sections);
             $pdtCnt  = ($yardId !== null)
                 ? count_location_tasks_statuses($date, (int)$yardId, $statuses) : 0;
             $pdtName = null;
@@ -964,7 +1027,11 @@ switch ($action) {
                 'label'      => $locName,
                 'locationId' => (int)$locId,
                 'count'      => $cnt,
-                'mop'        => ['count' => $mopCnt, 'zones' => $mopB['zones']],
+                'mop'        => [
+                    'count'     => $mopCnt,
+                    'zones'     => $mopZones,
+                    'lazyZones' => count($mopZones) > 0,
+                ],
                 'pdt'        => [
                     'count'    => $pdtCnt,
                     'yardId'   => $yardId,
@@ -979,13 +1046,7 @@ switch ($action) {
 
         $projectTotal = 0;
         foreach ($statuses as $st) {
-            $complete = true;
-            $all = tb_get_all('/reports/tasks', [
-                'date'    => $date,
-                'project' => TB_PROJECT,
-                'status'  => $st,
-            ], $complete);
-            $projectTotal += count($all);
+            $projectTotal += count(get_project_tasks_by_status($date, $st));
         }
         $other = max(0, $projectTotal - $houseSum);
 

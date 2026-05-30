@@ -334,6 +334,21 @@ function houseDateParamForBreakdown(){
   return getDateParam(period);
 }
 
+/** Фоновый прогрев детализации KPI (после загрузки дашборда) */
+function prefetchTaskBreakdown(){
+  if(!isDayMode()) return;
+  const dateParam=houseDateParamForBreakdown();
+  ['planned','in_progress','missed'].forEach(statusGroup=>{
+    const cacheKey=statusGroup+':'+dateParam;
+    if(taskBreakdownCache[cacheKey]) return;
+    fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+
+      '&date='+encodeURIComponent(dateParam), 180000)
+      .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP')))
+      .then(d=>{ if(d && !d.error) taskBreakdownCache[cacheKey]=d; })
+      .catch(()=>{});
+  });
+}
+
 async function openTaskBreakdown(statusGroup){
   if(!isDayMode()){
     alert('Детализация по домам и локациям доступна для периодов «Сегодня» и «Вчера».');
@@ -359,6 +374,7 @@ async function openTaskBreakdown(statusGroup){
     const labels={planned:'Запланировано',in_progress:'В работе',missed:'Пропущено',done:'Выполнено'};
     titleEl.textContent=(labels[statusGroup]||statusGroup)+' — '+d.total+' задач';
     body.innerHTML=renderTaskBreakdownHtml(d);
+    body.querySelectorAll('[data-tb-bound]').forEach(el=>delete el.dataset.tbBound);
     bindTaskBreakdownHandlers(d, statusGroup, dateParam);
   }catch(e){
     body.innerHTML='<div style="color:var(--red);">Не удалось загрузить: '+escHtml(e.message)+'</div>';
@@ -377,16 +393,20 @@ function renderTaskBreakdownHtml(d){
     return html;
   }
   html+=d.houses.map((h,idx)=>{
-    const mopZ=(h.mop&&h.mop.zones)?h.mop.zones.filter(z=>z.count>0):[];
+    const mopZ=(h.mop&&h.mop.zones)?h.mop.zones.filter(z=>z.count>0 && !z.lazy):[];
     const pdtC=(h.pdt&&h.pdt.count)?h.pdt.count:0;
     let zones='';
+    if(h.mop&&h.mop.count>0){
+      zones+='<div class="breakdown-mop-header" style="margin:6px 0 4px;font-weight:500;color:var(--text-2);">🧹 МОП — '+h.mop.count+'</div>';
+    }
     if(mopZ.length){
-      zones+='<div style="margin:6px 0 4px;font-weight:500;color:var(--text-2);">🧹 МОП — '+h.mop.count+'</div>';
       mopZ.forEach(z=>{
         zones+='<div class="breakdown-zone" data-loc="'+z.id+'">'+
           '<div class="breakdown-zone-h"><span>'+escHtml(z.name)+'</span><span>'+z.count+'</span></div>'+
           '<div class="breakdown-zone-tasks"></div></div>';
       });
+    }else if(h.mop&&h.mop.lazyZones){
+      zones+='<div class="breakdown-zones-placeholder" style="font-size:12px;color:var(--text-3);padding:4px 0 8px;">Секции МОП — раскройте дом</div>';
     }else if(h.mop&&h.mop.count>0){
       zones+='<div class="breakdown-zone" data-loc="'+h.locationId+'">'+
         '<div style="margin:6px 0;font-weight:500;">🧹 МОП — '+h.mop.count+'</div>'+
@@ -398,7 +418,8 @@ function renderTaskBreakdownHtml(d){
         '<div class="breakdown-zone-h"><span>🧤 ПДТ — '+escHtml(h.pdt.yardName||'двор')+'</span><span>'+pdtC+'</span></div>'+
         '<div class="breakdown-zone-tasks"></div></div>';
     }
-    return '<div class="breakdown-house" data-house-id="'+escHtml(h.id)+'" data-loc="'+h.locationId+'">'+
+    return '<div class="breakdown-house" data-house-id="'+escHtml(h.id)+'" data-loc="'+h.locationId+'"'+
+      (h.mop&&h.mop.lazyZones?' data-lazy-zones="1"':'')+'>'+
       '<div class="breakdown-house-h"><span>'+escHtml(h.label)+'</span><span>'+h.count+'</span></div>'+
       '<div class="breakdown-house-b">'+zones+
       '<button type="button" class="breakdown-map-btn" data-house-id="'+escHtml(h.id)+'" style="margin-top:8px;font-size:12px;">Показать на карте</button>'+
@@ -407,11 +428,57 @@ function renderTaskBreakdownHtml(d){
   return html;
 }
 
-function bindTaskBreakdownHandlers(d, statusGroup, dateParam){
-  document.querySelectorAll('.breakdown-house-h').forEach(h=>{
-    h.onclick=()=>h.closest('.breakdown-house').classList.toggle('open');
+function renderMopZoneItems(zones){
+  return (zones||[]).filter(z=>z.count>0).map(z=>
+    '<div class="breakdown-zone" data-loc="'+z.id+'">'+
+      '<div class="breakdown-zone-h"><span>'+escHtml(z.name)+'</span><span>'+z.count+'</span></div>'+
+      '<div class="breakdown-zone-tasks"></div></div>'
+  ).join('');
+}
+
+async function loadHouseBreakdownZones(houseEl, statusGroup, dateParam){
+  const locId=houseEl.dataset.loc;
+  const body=houseEl.querySelector('.breakdown-house-b');
+  const placeholder=body.querySelector('.breakdown-zones-placeholder');
+  if(placeholder) placeholder.textContent='⏳ Загрузка секций…';
+  try{
+    const r=await fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+
+      '&date='+encodeURIComponent(dateParam)+'&house_location_id='+locId+'&expand=zones', 120000);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    if(placeholder) placeholder.remove();
+    const old=body.querySelector('.breakdown-mop-zones');
+    if(old) old.remove();
+    const wrap=document.createElement('div');
+    wrap.className='breakdown-mop-zones';
+    wrap.innerHTML=renderMopZoneItems(data.mop&&data.mop.zones);
+    const header=body.querySelector('.breakdown-mop-header');
+    if(header) header.after(wrap);
+    houseEl.dataset.lazyZones='0';
+    houseEl.dataset.zonesLoaded='1';
+    bindTaskBreakdownHandlers(null, statusGroup, dateParam, houseEl);
+  }catch(e){
+    if(placeholder) placeholder.textContent='Не удалось загрузить секции: '+e.message;
+  }
+}
+
+function bindTaskBreakdownHandlers(d, statusGroup, dateParam, root){
+  const scope=root||document;
+  scope.querySelectorAll('.breakdown-house-h').forEach(h=>{
+    if(h.dataset.tbBound) return;
+    h.dataset.tbBound='1';
+    h.onclick=()=>{
+      const houseEl=h.closest('.breakdown-house');
+      const opening=!houseEl.classList.contains('open');
+      houseEl.classList.toggle('open');
+      if(opening && houseEl.dataset.lazyZones==='1' && !houseEl.dataset.zonesLoaded){
+        loadHouseBreakdownZones(houseEl, statusGroup, dateParam);
+      }
+    };
   });
-  document.querySelectorAll('.breakdown-map-btn').forEach(btn=>{
+  scope.querySelectorAll('.breakdown-map-btn').forEach(btn=>{
+    if(btn.dataset.tbBound) return;
+    btn.dataset.tbBound='1';
     btn.onclick=()=>{
       const id=btn.dataset.houseId;
       document.getElementById('task-breakdown-modal').classList.add('hidden');
@@ -419,7 +486,9 @@ function bindTaskBreakdownHandlers(d, statusGroup, dateParam){
       if(h) selectHouse(h);
     };
   });
-  document.querySelectorAll('.breakdown-zone-h').forEach(h=>{
+  scope.querySelectorAll('.breakdown-zone-h').forEach(h=>{
+    if(h.dataset.tbBound) return;
+    h.dataset.tbBound='1';
     h.onclick=(e)=>{
       e.stopPropagation();
       const zone=h.closest('.breakdown-zone');
@@ -882,6 +951,7 @@ async function loadPeriod(p){
     renderKPI(); renderCharts();
     setStatus('✓ '+periodCache[cacheKey].suffix);
     renderShifts();
+    if(isDayMode()) prefetchTaskBreakdown();
     if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
     return;
   }
@@ -925,6 +995,7 @@ async function loadPeriod(p){
 
     renderKPI(); renderCharts();
     setStatus('✓ Данные обновлены · '+suffix);
+    if(isDayMode()) prefetchTaskBreakdown();
   }catch(e){
     setStatus('⚠ Ошибка: '+e.message);
     console.error('loadPeriod:', e);
