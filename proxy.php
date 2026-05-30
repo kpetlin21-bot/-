@@ -234,6 +234,59 @@ function pdt_stats_for_yard(?int $yardId, string $date): array {
     ];
 }
 
+/** Все задачи по локации за дату (без фильтра статуса) */
+function fetch_location_tasks_raw(string $date, int $locId): array {
+    $r = tb_get('/reports/tasks', [
+        'date'     => $date,
+        'project'  => TB_PROJECT,
+        'location' => $locId . '*',
+        'limit'    => 250,
+    ]);
+    return $r['data'] ?? [];
+}
+
+/** Строка задачи для дашборда: название, статус, время (MSK) */
+function format_report_task_row(array $t): array {
+    $dt = msk_dt($t['started_at'] ?? null);
+    return [
+        'name'   => ($t['task']['name'] ?? null) ?: '—',
+        'status' => $t['status'] ?? '',
+        'time'   => $dt ? $dt->format('H:i') : null,
+    ];
+}
+
+/** Список задач ПДТ по двору — для раскрытия в детализации дома */
+function pdt_task_list(int $yardId, string $date): array {
+    $raw = fetch_location_tasks_raw($date, $yardId);
+    $order = ['done' => 0, 'in_progress' => 1, 'pending' => 2, 'available' => 3, 'missed' => 4];
+    usort($raw, function ($a, $b) use ($order) {
+        $sa = $a['status'] ?? '';
+        $sb = $b['status'] ?? '';
+        $oa = $order[$sa] ?? 5;
+        $ob = $order[$sb] ?? 5;
+        if ($oa !== $ob) {
+            return $oa - $ob;
+        }
+        $ta = $a['started_at'] ?? '';
+        $tb = $b['started_at'] ?? '';
+        if ($ta !== $tb) {
+            if ($ta === '') return 1;
+            if ($tb === '') return -1;
+            return strcmp($ta, $tb);
+        }
+        return strcmp(($a['task']['name'] ?? ''), ($b['task']['name'] ?? ''));
+    });
+    $items = [];
+    foreach ($raw as $t) {
+        $st = $t['status'] ?? '';
+        if (!in_array($st, ['done', 'missed', 'in_progress', 'pending', 'available'], true)) {
+            continue;
+        }
+        $items[] = format_report_task_row($t);
+    }
+    return $items;
+}
+
 switch ($action) {
 
     // ----------------------------------------------------------
@@ -669,7 +722,7 @@ switch ($action) {
     //    Всего = МОП + ПДТ
     // ----------------------------------------------------------
     case 'house_detail':
-        set_time_limit(120);
+        set_time_limit(180);
         $locId = (int)($_GET['location_id'] ?? 0);
         if (!$locId) { echo json_encode(['error'=>'location_id required']); break; }
         $date = normalize_report_date($_GET['date'] ?? $today, $tz_msk, $today);
@@ -694,6 +747,17 @@ switch ($action) {
         $pdtDone  = $pdt['done'];
         $pdtMiss  = $pdt['missed'];
         $pdtTot   = $pdtDone + $pdtMiss;
+        $pdtTasks = [];
+        $pdtYardName = null;
+        if ($yardId !== null) {
+            $pdtTasks = pdt_task_list((int)$yardId, $date);
+            foreach ($allLocs as $l) {
+                if ((int)$l['id'] === (int)$yardId) {
+                    $pdtYardName = $l['name'] ?? null;
+                    break;
+                }
+            }
+        }
 
         $houseDone = $mopDone + $pdtDone;
         $houseMiss = $mopMiss + $pdtMiss;
@@ -704,7 +768,12 @@ switch ($action) {
             'locId'  => $locId,
             'total'  => ['done'=>$houseDone,'missed'=>$houseMiss,'total'=>$houseTot],
             'mop'    => ['done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0,'zones'=>$mopZones],
-            'pdt'    => ['done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,'yardId'=>$yardId,'hasYard'=>$yardId!==null],
+            'pdt'    => [
+                'done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,
+                'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,
+                'yardId'=>$yardId,'yardName'=>$pdtYardName,'hasYard'=>$yardId!==null,
+                'tasks'=>$pdtTasks,
+            ],
         ], JSON_UNESCAPED_UNICODE);
         break;
 
