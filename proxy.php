@@ -207,6 +207,24 @@ function house_traffic_worst_of(int $mopDone, int $mopMiss, int $pdtDone, int $p
     ];
 }
 
+/** Внутренний HTTP-прогрев endpoint (записывает файловый кеш на сервере) */
+function warmup_proxy_endpoint(string $query, int $timeoutSec = 280): ?array {
+    $host = $_SERVER['HTTP_HOST'] ?? 'api.cleansyst.ru';
+    $url  = 'https://' . $host . '/proxy.php?' . $query;
+    $ctx  = stream_context_create(['http' => [
+        'method'  => 'GET',
+        'header'  => "Accept: application/json\r\n",
+        'timeout' => $timeoutSec,
+        'ignore_errors' => true,
+    ]]);
+    $body = @file_get_contents($url, false, $ctx);
+    if ($body === false || $body === '') {
+        return null;
+    }
+    $json = json_decode($body, true);
+    return is_array($json) ? $json : null;
+}
+
 /** today/yesterday → Y-m-d (MSK); иначе дата как есть */
 function normalize_report_date(string $date, DateTimeZone $tz, string $todayStr): string {
     $d = strtolower(trim($date));
@@ -828,14 +846,43 @@ switch ($action) {
 
         // Прогрев кеша задач по статусам (ускоряет KPI → детализация)
         $statusWarm = [];
-        foreach (['available', 'pending', 'in_progress', 'missed'] as $st) {
+        foreach (['available', 'pending', 'in_progress', 'missed', 'done'] as $st) {
             $statusWarm[$st] = count(get_project_tasks_by_status($todayStr, $st));
         }
+
+        // Прогрев house_breakdown и task_breakdown (файловый кеш на диске)
+        $houseWarm = [];
+        foreach (['today', 'yesterday'] as $dlabel) {
+            $t0 = microtime(true);
+            $hb  = warmup_proxy_endpoint('action=house_breakdown&date=' . $dlabel, 300);
+            $houseWarm[$dlabel] = [
+                'ok'      => $hb !== null && !isset($hb['error']),
+                'houses'  => is_array($hb['houses'] ?? null) ? count($hb['houses']) : 0,
+                'seconds' => round(microtime(true) - $t0, 1),
+            ];
+        }
+
+        $taskBdWarm = [];
+        foreach (['planned', 'in_progress', 'missed'] as $group) {
+            $t0  = microtime(true);
+            $tbd = warmup_proxy_endpoint('action=task_breakdown&status=' . $group . '&date=today', 300);
+            $taskBdWarm[$group] = [
+                'ok'      => $tbd !== null && !isset($tbd['error']),
+                'total'   => (int)($tbd['total'] ?? 0),
+                'seconds' => round(microtime(true) - $t0, 1),
+            ];
+        }
+
+        // Дашборд за сегодня (KPI + смены)
+        $dashWarm = warmup_proxy_endpoint('action=dashboard&date=today', 120);
 
         echo json_encode([
             'warmed'              => $report,
             'history_days_warmed' => $histWarmed,
             'status_tasks_today'  => $statusWarm,
+            'house_breakdown'     => $houseWarm,
+            'task_breakdown'      => $taskBdWarm,
+            'dashboard_today'     => $dashWarm !== null && !isset($dashWarm['error']),
             'ts'                  => $now->format('Y-m-d H:i:s'),
         ], JSON_UNESCAPED_UNICODE);
         break;
@@ -1374,11 +1421,82 @@ switch ($action) {
         break;
 
     // ----------------------------------------------------------
+    //  Задачи менеджера на день (не ThroneBaron) — этап 0: демо JSON
+    //  ?action=day_tasks&date=today
+    // ----------------------------------------------------------
+    case 'day_tasks':
+        $rawDate = $_GET['date'] ?? 'today';
+        if (strpos($rawDate, ',') !== false) {
+            echo json_encode([
+                'demo'    => true,
+                'date'    => $rawDate,
+                'tasks'   => [],
+                'message' => 'Демо-блок доступен для «Сегодня» и «Вчера»',
+            ], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $date = normalize_report_date($rawDate, $tz_msk, $today);
+        $yesterday = (new DateTime($today, $tz_msk))->modify('-1 day')->format('Y-m-d');
+
+        $dataFile = __DIR__ . '/data/day_tasks_demo.json';
+        if (!is_readable($dataFile)) {
+            echo json_encode(['error' => 'demo data file not found', 'date' => $date], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $raw = json_decode(file_get_contents($dataFile), true);
+        $items = $raw['tasks'] ?? [];
+
+        $out = [];
+        foreach ($items as $t) {
+            $d = $t['date'] ?? 'today';
+            if ($d === 'today') {
+                $taskDate = $today;
+            } elseif ($d === 'yesterday') {
+                $taskDate = $yesterday;
+            } else {
+                $taskDate = $d;
+            }
+            if ($taskDate !== $date) {
+                continue;
+            }
+            $out[] = [
+                'id'          => $t['id'] ?? uniqid('mgr-', true),
+                'date'        => $taskDate,
+                'house_id'    => $t['house_id'] ?? '',
+                'house_label' => $t['house_label'] ?? $t['house_id'] ?? '—',
+                'title'       => $t['title'] ?? '',
+                'status'      => $t['status'] ?? 'new',
+                'source'      => $t['source'] ?? 'manual',
+                'created_by'  => $t['created_by'] ?? null,
+                'due_time'    => $t['due_time'] ?? null,
+            ];
+        }
+
+        usort($out, function ($a, $b) {
+            $order = ['new' => 0, 'in_progress' => 1, 'done' => 2];
+            $oa = $order[$a['status']] ?? 3;
+            $ob = $order[$b['status']] ?? 3;
+            if ($oa !== $ob) {
+                return $oa - $ob;
+            }
+            return strcmp($a['house_label'], $b['house_label']);
+        });
+
+        echo json_encode([
+            'demo'  => true,
+            'date'  => $date,
+            'total' => count($out),
+            'tasks' => $out,
+        ], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ----------------------------------------------------------
     //  Помощь: список доступных action
     // ----------------------------------------------------------
     default:
         echo json_encode([
             'endpoints' => [
+                '?action=day_tasks&date=today'  => 'Демо: задачи менеджера на день (не ThroneBaron)',
                 '?action=projects'              => 'Список проектов (найти project_id)',
                 '?action=dashboard&date=today'  => 'Все KPI за дату — основной запрос дашборда',
                 '?action=teams'                 => 'Команды проекта (= дома ЖК)',

@@ -93,6 +93,14 @@
   .detail-zone-block.collapsed .detail-body{display:none;}
   .detail-zone-bar{height:3px; background:var(--surface-2); border-radius:2px; margin-bottom:8px;}
   .detail-zone-bar>div{height:100%; border-radius:2px;}
+  .day-tasks-note{font-size:12px;color:var(--text-3);margin:0 0 10px;line-height:1.45;}
+  .day-tasks-table td{vertical-align:top;}
+  .day-tasks-table .house-link{color:var(--blue);cursor:pointer;text-decoration:none;border-bottom:1px dashed rgba(24,95,165,0.35);}
+  .day-tasks-table .house-link:hover{border-bottom-color:var(--blue);}
+  .src-pill{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--surface-2);color:var(--text-2);white-space:nowrap;}
+  .src-pill.tg{background:#E8F4FC;color:#185FA5;}
+  .src-pill.platrum{background:#F1EFE8;color:#5F5E5A;}
+  .src-pill.manual{background:#FAEEDA;color:#BA7517;}
 </style>
 </head>
 <body>
@@ -121,6 +129,22 @@
     <div class="cbody" id="b-rate">
       <div class="chart-wrap"><canvas id="chartRate" role="img" aria-label="График выполнения задач"></canvas></div>
       <div id="rate-note" style="font-size:11px; color:var(--text-3); margin-top:8px; line-height:1.4;"></div>
+    </div>
+  </div>
+
+  <div class="card collapsible" id="card-day-tasks">
+    <h3 class="ch" data-target="b-day-tasks">
+      <span class="chev">▾</span> Задачи на день
+      <span class="demo-badge" style="margin-left:8px;font-weight:400;">демо · не ThroneBaron</span>
+    </h3>
+    <div class="cbody" id="b-day-tasks">
+      <p class="day-tasks-note" id="day-tasks-note">
+        Поручения менеджера объекта (Telegram / Platrum / вручную). Не входят в KPI клининга ThroneBaron.
+        <span id="day-tasks-period-hint"></span>
+      </p>
+      <div id="day-tasks-body">
+        <div style="color:var(--text-3);font-size:13px;padding:12px 0;">⏳ Загрузка…</div>
+      </div>
     </div>
   </div>
 
@@ -960,6 +984,7 @@ document.getElementById('period-seg').addEventListener('click',e=>{
   loadPeriod(period);
   updateHousePeriodUI();
   if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
+  loadDayTasks();
 });
 
 // Загружаем данные за произвольный период
@@ -983,6 +1008,7 @@ async function loadPeriod(p){
     setStatus('✓ '+periodCache[cacheKey].suffix);
     renderShifts();
     if(isDayMode()) prefetchTaskBreakdown();
+    loadDayTasks();
     if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
     return;
   }
@@ -1033,11 +1059,11 @@ async function loadPeriod(p){
   }
   renderShifts();
   updateHousePeriodUI();
+  loadDayTasks();
   if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
 }
 async function loadToday(){
   await loadPeriod('today');
-  loadHouseBreakdown();
 }
 
 // Загрузка детализации по домам (может занять 10-20 сек — много API-вызовов)
@@ -1129,6 +1155,75 @@ async function loadHistory(){
 
 function setStatus(t){ statusEl.textContent=t; }
 
+const DAY_TASK_STATUS={new:'Новая',in_progress:'В работе',done:'Выполнена'};
+const DAY_TASK_SOURCE={telegram:'Telegram',platrum:'Platrum',manual:'Вручную'};
+
+async function loadDayTasks(){
+  const body=document.getElementById('day-tasks-body');
+  const hint=document.getElementById('day-tasks-period-hint');
+  if(!body) return;
+  if(isPeriodRangeMode()){
+    body.innerHTML='<div style="color:var(--text-3);font-size:13px;padding:8px 0;">Для недели и месяца демо-список скрыт. Выберите «Сегодня» или «Вчера».</div>';
+    if(hint) hint.textContent='';
+    return;
+  }
+  const dateParam=period==='today'?'today':(period==='yesterday'?'yesterday':getDateParam(period));
+  if(hint){
+    hint.textContent=period==='today'?' · сегодня':(period==='yesterday'?' · вчера':' · '+dateParam);
+  }
+  body.innerHTML='<div style="color:var(--text-3);font-size:13px;padding:8px 0;">⏳ Загрузка…</div>';
+  try{
+    const r=await fetch(PROXY+'?action=day_tasks&date='+encodeURIComponent(dateParam));
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    body.innerHTML=renderDayTasksHtml(d);
+    bindDayTasksHandlers();
+  }catch(e){
+    body.innerHTML='<div style="color:var(--red);font-size:13px;">Не удалось загрузить: '+escHtml(e.message)+'</div>';
+  }
+}
+
+function renderDayTasksHtml(d){
+  if(d.message){
+    return '<div style="color:var(--text-3);font-size:13px;">'+escHtml(d.message)+'</div>';
+  }
+  const tasks=d.tasks||[];
+  if(!tasks.length){
+    return '<div style="color:var(--text-3);font-size:13px;padding:8px 0;">Нет задач менеджера на выбранный день.</div>';
+  }
+  let html='<div style="overflow-x:auto;"><table class="day-tasks-table"><thead><tr>'+
+    '<th>Дом (адрес)</th><th>Задача</th><th>Статус</th><th>Источник</th><th>Срок</th><th>Постановщик</th>'+
+    '</tr></thead><tbody>';
+  tasks.forEach(t=>{
+    const st=t.status||'new';
+    const stCls=st==='done'?'ok':(st==='in_progress'?'warn':'');
+    const src=(t.source||'manual').toLowerCase();
+    const srcCls=src==='telegram'?'tg':(src==='platrum'?'platrum':'manual');
+    const hid=escHtml(t.house_id||'');
+    html+='<tr>'+
+      '<td><a href="#" class="house-link" data-house-id="'+hid+'">'+escHtml(t.house_label||t.house_id||'—')+'</a></td>'+
+      '<td>'+escHtml(t.title)+'</td>'+
+      '<td><span class="pill sm '+stCls+'">'+(DAY_TASK_STATUS[st]||st)+'</span></td>'+
+      '<td><span class="src-pill '+srcCls+'">'+(DAY_TASK_SOURCE[src]||src)+'</span></td>'+
+      '<td style="white-space:nowrap;color:var(--text-2);">'+escHtml(t.due_time||'—')+'</td>'+
+      '<td style="color:var(--text-3);font-size:12px;">'+escHtml(t.created_by||'—')+'</td>'+
+      '</tr>';
+  });
+  html+='</tbody></table></div>';
+  html+='<div style="font-size:11px;color:var(--text-3);margin-top:8px;">Всего: <b>'+tasks.length+'</b> · этап 0, демо-данные</div>';
+  return html;
+}
+
+function bindDayTasksHandlers(){
+  document.querySelectorAll('.day-tasks-table .house-link').forEach(a=>{
+    a.onclick=e=>{
+      e.preventDefault();
+      const id=a.dataset.houseId;
+      if(id) selectHouse(id);
+    };
+  });
+}
+
 // Автообновление каждые 5 минут
 setInterval(loadToday, 5*60*1000);
 
@@ -1153,6 +1248,7 @@ document.getElementById('house-detail').addEventListener('click',e=>{
 updateHousePeriodUI();
 renderAll();
 loadToday();
+loadDayTasks();
 loadHistory();
 </script>
 </body>
