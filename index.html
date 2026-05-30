@@ -28,6 +28,25 @@
   .kpi-value{font-size:26px; font-weight:500; font-variant-numeric:tabular-nums;}
   .kpi-sub{font-size:12px; color:var(--text-3); margin-top:2px;}
   .kpi-value.green{color:var(--green);} .kpi-value.amber{color:var(--amber);} .kpi-value.red{color:var(--red);}
+  .kpi.clickable{cursor:pointer; transition:box-shadow 0.15s, border-color 0.15s;}
+  .kpi.clickable:hover{border-color:var(--blue); box-shadow:0 2px 8px rgba(24,95,165,0.12);}
+  .kpi-hint{font-size:10px; color:var(--blue); margin-top:4px;}
+  .modal-overlay{position:fixed; inset:0; background:rgba(44,44,42,0.45); z-index:1000; display:flex; align-items:flex-start; justify-content:center; padding:24px 16px; overflow-y:auto;}
+  .modal-overlay.hidden{display:none;}
+  .modal-box{background:var(--surface); border-radius:12px; border:0.5px solid var(--border-2); max-width:720px; width:100%; padding:16px 18px; max-height:calc(100vh - 48px); overflow-y:auto;}
+  .modal-head{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px;}
+  .modal-head h2{font-size:16px; font-weight:500; margin:0;}
+  .modal-close{background:none; border:none; font-size:22px; line-height:1; color:var(--text-3); cursor:pointer; padding:0 4px;}
+  .modal-close:hover{color:var(--text);}
+  .breakdown-house{margin-bottom:10px; border:0.5px solid var(--border); border-radius:10px; overflow:hidden;}
+  .breakdown-house-h{display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:var(--surface-2); cursor:pointer; font-size:13px; font-weight:500;}
+  .breakdown-house-h:hover{background:#E8E6DF;}
+  .breakdown-house-b{padding:8px 12px 10px; display:none; font-size:12px;}
+  .breakdown-house.open .breakdown-house-b{display:block;}
+  .breakdown-zone{margin:6px 0; padding:6px 8px; background:var(--surface); border-radius:6px;}
+  .breakdown-zone-h{display:flex; justify-content:space-between; cursor:pointer; font-weight:500;}
+  .breakdown-zone.open .breakdown-zone-tasks{display:block;}
+  .breakdown-zone-tasks{display:none; margin-top:8px;}
   .row{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;}
   @media(max-width:860px){ .row{grid-template-columns:1fr;} }
   .card{background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:14px 16px;}
@@ -74,6 +93,14 @@
   .detail-zone-block.collapsed .detail-body{display:none;}
   .detail-zone-bar{height:3px; background:var(--surface-2); border-radius:2px; margin-bottom:8px;}
   .detail-zone-bar>div{height:100%; border-radius:2px;}
+  .day-tasks-note{font-size:12px;color:var(--text-3);margin:0 0 10px;line-height:1.45;}
+  .day-tasks-table td{vertical-align:top;}
+  .day-tasks-table .house-link{color:var(--blue);cursor:pointer;text-decoration:none;border-bottom:1px dashed rgba(24,95,165,0.35);}
+  .day-tasks-table .house-link:hover{border-bottom-color:var(--blue);}
+  .src-pill{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--surface-2);color:var(--text-2);white-space:nowrap;}
+  .src-pill.tg{background:#E8F4FC;color:#185FA5;}
+  .src-pill.platrum{background:#F1EFE8;color:#5F5E5A;}
+  .src-pill.manual{background:#FAEEDA;color:#BA7517;}
 </style>
 </head>
 <body>
@@ -105,6 +132,22 @@
     </div>
   </div>
 
+  <div class="card collapsible" id="card-day-tasks">
+    <h3 class="ch" data-target="b-day-tasks">
+      <span class="chev">▾</span> Задачи на день
+      <span class="demo-badge" style="margin-left:8px;font-weight:400;">демо · не ThroneBaron</span>
+    </h3>
+    <div class="cbody" id="b-day-tasks">
+      <p class="day-tasks-note" id="day-tasks-note">
+        Поручения менеджера объекта (Telegram / Platrum / вручную). Не входят в KPI клининга ThroneBaron.
+        <span id="day-tasks-period-hint"></span>
+      </p>
+      <div id="day-tasks-body">
+        <div style="color:var(--text-3);font-size:13px;padding:12px 0;">⏳ Загрузка…</div>
+      </div>
+    </div>
+  </div>
+
   <div class="row">
     <div class="card collapsible">
       <h3 class="ch" data-target="b-map"><span class="chev">▾</span> Карта объекта — светофор по домам (кликабельно)</h3>
@@ -117,6 +160,7 @@
           </svg>
         </div>
         <div class="legend">
+          <span style="width:100%;margin-bottom:2px;color:var(--text-3);">Цвет дома — по худшему из МОП и ПДТ (где есть задачи)</span>
           <span><span class="dot" style="background:#97C459"></span> 100%</span>
           <span><span class="dot" style="background:#EF9F27"></span> 80–99%</span>
           <span><span class="dot" style="background:#E24B4A"></span> ≤79%</span>
@@ -178,6 +222,16 @@
 
 </div>
 
+<div class="modal-overlay hidden" id="task-breakdown-modal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="task-breakdown-title">Задачи по домам</h2>
+      <button type="button" class="modal-close" id="task-breakdown-close" aria-label="Закрыть">&times;</button>
+    </div>
+    <div id="task-breakdown-body" style="font-size:13px; color:var(--text-2);">Загрузка…</div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 const HOUSES_GEO=[{"id": "37к2", "points": "196.3,513.9 195.8,503.5 187.0,503.9 184.7,454.9 169.6,455.6 172.4,515.0 196.3,513.9", "cx": 186.0, "cy": 494.4, "label": "Загородная 37к2"}, {"id": "41к3", "points": "169.8,446.0 180.9,445.4 180.3,433.9 212.7,432.2 212.1,420.0 168.6,422.2 169.8,446.0", "cx": 184.9, "cy": 435.1, "label": "Загородная 41к3"}, {"id": "43к3", "points": "164.7,377.4 178.4,376.4 174.3,319.0 225.4,315.5 229.5,373.7 243.3,372.8 238.4,302.7 159.8,308.1 164.7,377.4", "cx": 197.6, "cy": 347.0, "label": "Загородная 43к3"}, {"id": "43к4", "points": "282.1,369.4 295.7,368.4 291.7,311.0 342.8,307.5 346.9,365.7 360.7,364.8 355.8,294.7 277.2,300.1 282.1,369.4", "cx": 315.0, "cy": 339.0, "label": "Загородная 43к4"}, {"id": "43к5", "points": "398.4,361.7 412.7,361.0 409.6,301.7 461.0,299.1 464.0,357.0 477.1,356.4 473.6,287.3 394.8,291.2 398.4,361.7", "cx": 432.2, "cy": 330.8, "label": "Загородная 43к5"}, {"id": "45к3", "points": "232.0,220.0 215.6,221.2 217.5,246.0 170.9,249.5 169.1,224.9 153.3,226.1 156.3,264.8 234.9,259.0 232.0,220.0", "cx": 198.0, "cy": 236.8, "label": "Загородная 45к3"}, {"id": "45к4", "points": "348.4,212.7 332.0,214.0 333.9,238.8 287.3,242.3 285.5,217.7 269.7,218.9 272.6,257.6 351.3,251.8 348.4,212.7", "cx": 314.3, "cy": 229.6, "label": "Загородная 45к4"}, {"id": "30к1", "points": "711.4,270.2 633.4,276.2 636.4,313.6 650.9,312.5 649.1,289.4 698.0,285.6 699.9,309.6 714.4,308.4 711.4,270.2", "cx": 678.3, "cy": 292.9, "label": "Севастьянова 30к1"}, {"id": "30к2", "points": "592.3,278.8 514.4,284.0 516.9,321.4 531.4,320.5 529.8,297.4 578.8,294.2 580.4,318.1 594.9,317.2 592.3,278.8", "cx": 559.0, "cy": 301.2, "label": "Севастьянова 30к2"}, {"id": "32к2", "points": "584.6,183.0 567.9,184.3 570.4,217.5 523.8,221.1 521.2,187.1 504.9,188.3 508.7,236.9 588.3,230.8 584.6,183.0", "cx": 550.5, "cy": 203.6, "label": "Севастьянова 32к2"}, {"id": "32к4", "points": "466.1,205.3 449.7,206.5 451.6,231.3 405.1,234.8 403.2,210.2 387.5,211.4 390.4,250.2 469.1,244.3 466.1,205.3", "cx": 432.1, "cy": 222.1, "label": "Севастьянова 32к4"}, {"id": "34к1", "points": "701.6,128.2 695.0,30.3 686.6,30.8 686.6,30.0 676.8,30.6 676.9,32.1 671.0,32.5 670.9,31.0 661.6,31.6 661.7,32.9 649.8,33.7 649.8,32.3 640.4,32.9 640.4,34.1 634.3,34.5 634.3,33.1 624.6,33.7 624.7,35.2 616.6,35.7 623.0,131.7 626.4,131.4 626.5,132.1 646.8,130.8 646.0,117.2 634.6,117.9 633.6,103.5 635.5,103.4 632.4,56.2 631.4,56.3 631.2,52.3 627.5,52.6 627.1,46.6 641.1,45.7 641.2,47.2 653.5,46.4 653.4,45.3 659.4,44.9 659.5,46.1 671.9,45.3 671.8,43.9 686.3,42.9 686.7,48.6 682.7,48.9 683.0,52.5 681.5,52.6 686.9,129.7 690.7,129.5 690.7,128.1 698.5,127.6 698.6,128.4 701.6,128.2", "cx": 658.1, "cy": 65.3, "label": "Севастьянова 34к1"}, {"id": "10", "points": "233.0,466.9 233.1,468.9 232.2,468.9 233.0,484.5 234.4,484.4 235.0,494.5 233.6,494.6 234.2,506.4 235.8,506.3 236.2,512.7 238.5,512.6 238.6,514.5 240.8,514.4 240.9,515.6 246.8,515.3 246.7,514.0 249.1,513.9 249.0,511.8 250.9,511.7 248.4,466.0 233.0,466.9", "cx": 239.2, "cy": 497.4, "label": "Балканская 10"}, {"id": "12", "points": "287.8,463.9 289.4,505.0 291.0,504.9 291.2,509.6 294.6,509.4 294.7,509.7 300.5,509.4 300.6,511.0 306.0,510.8 305.9,509.2 315.2,508.9 315.1,505.8 316.7,505.8 316.6,502.9 315.0,503.0 314.9,500.7 313.1,500.7 312.9,494.9 304.9,495.2 304.9,494.1 300.9,494.3 300.6,486.6 301.7,486.5 301.2,472.6 303.3,471.3 302.7,470.3 313.0,464.1 313.5,464.9 316.2,463.3 316.7,464.2 321.0,461.6 320.5,460.7 323.6,458.8 323.1,458.0 328.3,454.9 328.8,455.8 332.0,453.8 332.7,455.0 337.5,452.2 336.8,451.0 340.1,449.0 339.6,448.2 344.9,448.0 345.0,450.1 347.9,450.0 347.8,447.9 353.2,447.7 353.4,453.5 350.0,453.6 350.9,475.9 353.4,475.8 353.7,486.1 352.8,486.1 353.3,498.3 353.8,498.3 354.0,504.2 356.7,504.1 356.7,506.1 359.2,506.0 359.2,507.1 365.1,506.9 365.1,505.8 367.3,505.7 367.2,503.7 369.3,503.6 367.3,452.9 365.9,453.0 365.2,434.3 356.7,434.7 356.6,433.6 347.0,434.0 347.0,435.1 344.2,435.2 344.3,436.3 338.8,436.5 338.7,434.9 332.2,435.1 332.3,436.7 320.9,443.5 321.9,445.1 317.5,447.7 316.7,446.4 305.6,453.0 306.4,454.4 301.9,457.0 301.0,455.6 287.7,463.6 287.8,463.9", "cx": 328.5, "cy": 472.7, "label": "Балканская 12"}, {"id": "14", "points": "401.8,418.9 406.7,496.7 408.3,496.6 408.6,501.2 411.8,501.0 411.8,501.4 417.9,501.0 418.0,502.8 423.2,502.5 423.1,500.3 432.2,499.8 431.7,492.6 430.1,492.7 429.7,486.7 422.4,487.1 422.3,485.7 418.1,486.0 418.0,483.9 416.9,483.9 416.6,478.7 418.8,478.6 418.2,469.4 418.9,469.4 418.7,466.1 420.5,466.0 420.1,459.5 418.3,459.6 417.7,450.1 419.2,450.0 418.8,444.5 417.4,444.6 417.1,440.7 416.4,440.7 416.1,436.4 413.9,436.6 413.5,430.3 418.4,430.0 418.6,432.0 421.4,431.8 421.3,429.8 427.0,429.5 427.1,430.9 430.8,430.6 430.9,431.8 436.3,431.5 436.3,430.3 440.0,430.1 439.9,428.7 445.7,428.3 445.7,429.6 449.1,429.3 449.2,430.7 454.5,430.4 454.4,429.0 457.6,428.8 457.6,427.6 463.6,427.2 463.7,428.9 466.6,428.7 466.5,427.0 471.4,426.7 471.8,432.0 469.3,432.1 469.5,436.1 468.8,436.2 469.0,439.9 467.4,440.0 468.2,451.9 467.0,452.0 468.0,467.9 470.8,467.8 471.1,472.2 470.1,472.3 470.5,477.8 468.9,477.9 469.6,490.0 471.2,489.9 471.6,495.8 473.6,495.6 473.8,497.9 476.8,497.7 476.9,498.9 482.0,498.6 481.9,497.4 484.2,497.3 484.0,495.0 486.4,494.8 481.3,414.0 401.8,418.9", "cx": 441.9, "cy": 459.8, "label": "Балканская 14"}, {"id": "28к1", "points": "688.9,371.6 639.2,393.6 645.8,483.4 666.9,481.8 665.9,468.3 656.8,468.9 651.9,402.5 690.8,385.0 703.6,384.1 703.8,386.9 710.6,478.9 727.9,477.6 721.1,385.6 719.9,369.2 688.9,371.6", "cx": 685.5, "cy": 420.6, "label": "Балканская 28к1"}, {"id": "28к2", "points": "592.2,488.3 606.3,487.5 603.0,420.6 549.4,406.9 549.4,407.0 522.9,408.5 527.7,493.8 548.0,492.7 547.0,476.0 540.8,476.3 537.7,420.1 546.6,419.6 589.0,430.4 592.2,488.3", "cx": 560.9, "cy": 451.1, "label": "Балканская 28к2"}];
@@ -193,6 +247,7 @@ const PROXY='https://api.cleansyst.ru/proxy.php';
 
 // Данные по периодам — кеш в памяти
 let periodCache={}; // {key: {tasks:{...}}}
+let houseBreakdownCache={}; // {period:date: houseToday[]}
 let liveInProgress=0; // текущий «в работе» — только из сегодня
 
 function fmtDate(iso){const d=new Date(iso);return d.getDate()+'.'+(d.getMonth()+1);}
@@ -258,7 +313,8 @@ function getDateParam(p){
 }
 
 // periodData — что сейчас отображается в KPI
-let periodData=null; // {tasks, closed, inProgress, missed, rate, suffix}
+let periodData=null;
+let taskBreakdownCache={};
 
 function renderKPI(){
   const staffTotal = liveShifts.length;
@@ -270,22 +326,236 @@ function renderKPI(){
     return;
   }
 
-  const {tasks, closed, inProgress, missed, rate, suffix} = periodData;
+  const {tasks, closed, planned, inProgress, missed, rate, suffix} = periodData;
   const rateClass=rate>=100?'green':(rate>=80?'amber':'red');
   const cards=[
-    {label:'% выполнения задач',    val:rate+'%',         cls:rateClass, sub:suffix},
-    {label:'Всего задач',            val:tasks,                           sub:'за период'},
-    {label:'Выполнено',              val:closed,           cls:'green',   sub:'из '+tasks},
-    {label:'В работе сейчас',        val:liveInProgress,   cls:liveInProgress>0?'amber':'', sub:'текущий момент'},
-    {label:'Пропущено',              val:missed,           cls:missed>0?'red':'',  sub:'за период'}
+    {label:'% выполнения задач', val:rate+'%', cls:rateClass, sub:suffix},
+    {label:'Всего задач', val:tasks, sub:'за период'},
+    {label:'Выполнено', val:closed, cls:'green', sub:'из '+tasks},
+    {label:'Запланировано', val:planned??0, cls:(planned>0?'amber':''), sub:'не начато', drill:'planned'},
+    {label:'В работе', val:inProgress??0, cls:(inProgress>0?'amber':''), sub:isDayMode()?'сейчас':'за период', drill:'in_progress'},
+    {label:'Пропущено', val:missed, cls:(missed>0?'red':''), sub:'за период', drill:'missed'}
   ];
-  // Выходы на смену — это показатель конкретного дня, поэтому только для «Сегодня»/«Вчера»
   if(isDayMode()){
     cards.push({label:'Не вышло на смену', val:notCame, cls:notCame>0?'red':'green', sub:'из '+staffTotal+' по плану'});
   }
-  document.getElementById('kpi-grid').innerHTML=cards.map(c=>
-    '<div class="kpi"><div class="kpi-label">'+c.label+'</div><div class="kpi-value '+(c.cls||'')+'">'+c.val+'</div><div class="kpi-sub">'+(c.sub||'')+'</div></div>').join('');
+  document.getElementById('kpi-grid').innerHTML=cards.map(c=>{
+    const drill=c.drill && isDayMode();
+    const cls='kpi'+(drill?' clickable':'');
+    const hint=drill?'<div class="kpi-hint">по домам и локациям →</div>':'';
+    return '<div class="'+cls+'"'+(drill?' data-drill="'+c.drill+'"':'')+'>'+
+      '<div class="kpi-label">'+c.label+'</div>'+
+      '<div class="kpi-value '+(c.cls||'')+'">'+c.val+'</div>'+
+      '<div class="kpi-sub">'+(c.sub||'')+'</div>'+hint+'</div>';
+  }).join('');
+  document.querySelectorAll('#kpi-grid .kpi.clickable').forEach(el=>{
+    el.onclick=()=>openTaskBreakdown(el.dataset.drill);
+  });
 }
+
+function houseDateParamForBreakdown(){
+  if(period==='today') return 'today';
+  if(period==='yesterday') return 'yesterday';
+  return getDateParam(period);
+}
+
+/** Фоновый прогрев детализации KPI (после загрузки дашборда) */
+function prefetchTaskBreakdown(){
+  if(!isDayMode()) return;
+  const dateParam=houseDateParamForBreakdown();
+  ['planned','in_progress','missed'].forEach(statusGroup=>{
+    const cacheKey=statusGroup+':'+dateParam;
+    if(taskBreakdownCache[cacheKey]) return;
+    fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+
+      '&date='+encodeURIComponent(dateParam), 180000)
+      .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP')))
+      .then(d=>{ if(d && !d.error) taskBreakdownCache[cacheKey]=d; })
+      .catch(()=>{});
+  });
+}
+
+async function openTaskBreakdown(statusGroup){
+  if(!isDayMode()){
+    alert('Детализация по домам и локациям доступна для периодов «Сегодня» и «Вчера».');
+    return;
+  }
+  const modal=document.getElementById('task-breakdown-modal');
+  const body=document.getElementById('task-breakdown-body');
+  const titleEl=document.getElementById('task-breakdown-title');
+  modal.classList.remove('hidden');
+  body.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-3);">⏳ Загружаю разбивку по домам…</div>';
+
+  const dateParam=houseDateParamForBreakdown();
+  const cacheKey=statusGroup+':'+dateParam;
+  try{
+    let d=taskBreakdownCache[cacheKey];
+    if(!d){
+      const r=await fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+'&date='+encodeURIComponent(dateParam), 180000);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      d=await r.json();
+      if(d.error) throw new Error(d.error);
+      taskBreakdownCache[cacheKey]=d;
+    }
+    const labels={planned:'Запланировано',in_progress:'В работе',missed:'Пропущено',done:'Выполнено'};
+    titleEl.textContent=(labels[statusGroup]||statusGroup)+' — '+d.total+' задач';
+    body.innerHTML=renderTaskBreakdownHtml(d);
+    body.querySelectorAll('[data-tb-bound]').forEach(el=>delete el.dataset.tbBound);
+    bindTaskBreakdownHandlers(d, statusGroup, dateParam);
+  }catch(e){
+    body.innerHTML='<div style="color:var(--red);">Не удалось загрузить: '+escHtml(e.message)+'</div>';
+  }
+}
+
+function renderTaskBreakdownHtml(d){
+  let html='<p style="margin:0 0 12px;font-size:12px;color:var(--text-3);">'+
+    'По домам на карте: <b>'+d.housesSum+'</b>';
+  if(d.other && d.other.count>0){
+    html+=' · '+escHtml(d.other.label)+': <b>'+d.other.count+'</b>';
+  }
+  html+=' · всего по проекту: <b>'+d.total+'</b></p>';
+  if(!d.houses || !d.houses.length){
+    html+='<div style="padding:16px;text-align:center;color:var(--text-3);">Нет задач в этом статусе по домам ЖК</div>';
+    return html;
+  }
+  html+=d.houses.map((h,idx)=>{
+    const mopZ=(h.mop&&h.mop.zones)?h.mop.zones.filter(z=>z.count>0 && !z.lazy):[];
+    const pdtC=(h.pdt&&h.pdt.count)?h.pdt.count:0;
+    let zones='';
+    if(h.mop&&h.mop.count>0){
+      zones+='<div class="breakdown-mop-header" style="margin:6px 0 4px;font-weight:500;color:var(--text-2);">🧹 МОП — '+h.mop.count+'</div>';
+    }
+    if(mopZ.length){
+      mopZ.forEach(z=>{
+        zones+='<div class="breakdown-zone" data-loc="'+z.id+'">'+
+          '<div class="breakdown-zone-h"><span>'+escHtml(z.name)+'</span><span>'+z.count+'</span></div>'+
+          '<div class="breakdown-zone-tasks"></div></div>';
+      });
+    }else if(h.mop&&h.mop.lazyZones){
+      zones+='<div class="breakdown-zones-placeholder" style="font-size:12px;color:var(--text-3);padding:4px 0 8px;">Секции МОП — раскройте дом</div>';
+    }else if(h.mop&&h.mop.count>0){
+      zones+='<div class="breakdown-zone" data-loc="'+h.locationId+'">'+
+        '<div style="margin:6px 0;font-weight:500;">🧹 МОП — '+h.mop.count+'</div>'+
+        '<div class="breakdown-zone-tasks"></div></div>';
+    }
+    if(pdtC>0){
+      const yid=h.pdt.yardId||'';
+      zones+='<div class="breakdown-zone" data-loc="'+yid+'">'+
+        '<div class="breakdown-zone-h"><span>🧤 ПДТ — '+escHtml(h.pdt.yardName||'двор')+'</span><span>'+pdtC+'</span></div>'+
+        '<div class="breakdown-zone-tasks"></div></div>';
+    }
+    return '<div class="breakdown-house" data-house-id="'+escHtml(h.id)+'" data-loc="'+h.locationId+'"'+
+      (h.mop&&h.mop.lazyZones?' data-lazy-zones="1"':'')+'>'+
+      '<div class="breakdown-house-h"><span>'+escHtml(h.label)+'</span><span>'+h.count+'</span></div>'+
+      '<div class="breakdown-house-b">'+zones+
+      '<button type="button" class="breakdown-map-btn" data-house-id="'+escHtml(h.id)+'" style="margin-top:8px;font-size:12px;">Показать на карте</button>'+
+      '</div></div>';
+  }).join('');
+  return html;
+}
+
+function renderMopZoneItems(zones){
+  return (zones||[]).filter(z=>z.count>0).map(z=>
+    '<div class="breakdown-zone" data-loc="'+z.id+'">'+
+      '<div class="breakdown-zone-h"><span>'+escHtml(z.name)+'</span><span>'+z.count+'</span></div>'+
+      '<div class="breakdown-zone-tasks"></div></div>'
+  ).join('');
+}
+
+async function loadHouseBreakdownZones(houseEl, statusGroup, dateParam){
+  const locId=houseEl.dataset.loc;
+  const body=houseEl.querySelector('.breakdown-house-b');
+  const placeholder=body.querySelector('.breakdown-zones-placeholder');
+  if(placeholder) placeholder.textContent='⏳ Загрузка секций…';
+  try{
+    const r=await fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+
+      '&date='+encodeURIComponent(dateParam)+'&house_location_id='+locId+'&expand=zones', 120000);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    if(placeholder) placeholder.remove();
+    const old=body.querySelector('.breakdown-mop-zones');
+    if(old) old.remove();
+    const wrap=document.createElement('div');
+    wrap.className='breakdown-mop-zones';
+    wrap.innerHTML=renderMopZoneItems(data.mop&&data.mop.zones);
+    const header=body.querySelector('.breakdown-mop-header');
+    if(header) header.after(wrap);
+    houseEl.dataset.lazyZones='0';
+    houseEl.dataset.zonesLoaded='1';
+    bindTaskBreakdownHandlers(null, statusGroup, dateParam, houseEl);
+  }catch(e){
+    if(placeholder) placeholder.textContent='Не удалось загрузить секции: '+e.message;
+  }
+}
+
+function bindTaskBreakdownHandlers(d, statusGroup, dateParam, root){
+  const scope=root||document;
+  scope.querySelectorAll('.breakdown-house-h').forEach(h=>{
+    if(h.dataset.tbBound) return;
+    h.dataset.tbBound='1';
+    h.onclick=()=>{
+      const houseEl=h.closest('.breakdown-house');
+      const opening=!houseEl.classList.contains('open');
+      houseEl.classList.toggle('open');
+      if(opening && houseEl.dataset.lazyZones==='1' && !houseEl.dataset.zonesLoaded){
+        loadHouseBreakdownZones(houseEl, statusGroup, dateParam);
+      }
+    };
+  });
+  scope.querySelectorAll('.breakdown-map-btn').forEach(btn=>{
+    if(btn.dataset.tbBound) return;
+    btn.dataset.tbBound='1';
+    btn.onclick=()=>{
+      const id=btn.dataset.houseId;
+      document.getElementById('task-breakdown-modal').classList.add('hidden');
+      const h=houseToday.find(x=>x.id===id);
+      if(h) selectHouse(h);
+    };
+  });
+  scope.querySelectorAll('.breakdown-zone-h').forEach(h=>{
+    if(h.dataset.tbBound) return;
+    h.dataset.tbBound='1';
+    h.onclick=(e)=>{
+      e.stopPropagation();
+      const zone=h.closest('.breakdown-zone');
+      zone.classList.toggle('open');
+      const tasksEl=zone.querySelector('.breakdown-zone-tasks');
+      if(zone.classList.contains('open') && tasksEl && !tasksEl.dataset.loaded){
+        loadZoneTasks(tasksEl, zone.dataset.loc, statusGroup, dateParam);
+      }
+    };
+  });
+  document.querySelectorAll('.breakdown-house-b .breakdown-zone').forEach(zone=>{
+    if(!zone.querySelector('.breakdown-zone-h') && zone.dataset.loc){
+      const tasksEl=zone.querySelector('.breakdown-zone-tasks');
+      zone.querySelector('div')?.addEventListener('click',()=>{
+        zone.classList.toggle('open');
+        if(zone.classList.contains('open') && tasksEl && !tasksEl.dataset.loaded){
+          loadZoneTasks(tasksEl, zone.dataset.loc, statusGroup, dateParam);
+        }
+      });
+    }
+  });
+}
+
+async function loadZoneTasks(el, locId, statusGroup, dateParam){
+  el.dataset.loaded='1';
+  el.innerHTML='<div style="color:var(--text-3);padding:6px;">Загрузка задач…</div>';
+  try{
+    const r=await fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+
+      '&date='+encodeURIComponent(dateParam)+'&location_id='+locId+'&expand=tasks', 120000);
+    const d=await r.json();
+    el.innerHTML=renderTaskTable(d.tasks||[]);
+  }catch(e){
+    el.innerHTML='<div style="color:var(--red);">'+escHtml(e.message)+'</div>';
+  }
+}
+
+document.getElementById('task-breakdown-close').onclick=()=>{
+  document.getElementById('task-breakdown-modal').classList.add('hidden');
+};
+document.getElementById('task-breakdown-modal').onclick=e=>{
+  if(e.target.id==='task-breakdown-modal') e.target.classList.add('hidden');
+};
 
 let chartRate;
 function renderCharts(){
@@ -446,6 +716,58 @@ function renderHouseDetailHeader(h, geo){
     '</div>'+periodNote;
 }
 
+/** МОП/ПДТ за неделю/месяц: агрегаты из house_breakdown, без списков задач */
+function renderMopPdtPeriodSummary(h){
+  function pill(pct,total){ const col=trafficColor(pct,total); return '<span style="color:'+col+';font-weight:500;">'+pct+'%</span>'; }
+  function bar(pct,total){ const col=trafficColor(pct,total); return '<div style="height:4px;background:var(--surface-2);border-radius:2px;margin:4px 0 8px;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px;"></div></div>'; }
+  const periodLbl=period==='7'?'за неделю':'за месяц';
+  let html='<div id="mop-pdt-area">';
+
+  const m=h.mop||{};
+  const mopDone=m.done||0;
+  const mopTot=m.total!=null?m.total:((m.done||0)+(m.missed||0));
+  const mopPct=m.pct!=null?m.pct:(mopTot>0?Math.round(mopDone/mopTot*100):0);
+  html+='<div class="detail-block">'+
+    '<div class="detail-ch">'+
+      '<span class="detail-ch-title"><span class="chev">▾</span> 🧹 МОП (подъезды)</span>'+
+      '<span>'+mopDone+'/'+mopTot+' · '+pill(mopPct,mopTot)+'</span>'+
+    '</div>'+
+    '<div class="detail-body">'+bar(mopPct,mopTot)+
+      (mopTot>0
+        ? '<div style="font-size:12px;color:var(--text-3);">Сумма по дням '+periodLbl+'</div>'
+        : '<div style="font-size:12px;color:var(--text-3);">Нет задач МОП '+periodLbl+'</div>')+
+    '</div></div>';
+
+  const p=h.pdt||{};
+  const hasYard=p.yardId!=null && p.yardId!=='';
+  if(!hasYard){
+    html+='<div class="detail-block">'+
+      '<div style="font-size:13px;font-weight:500;margin-bottom:4px;">🧤 ПДТ (территория)</div>'+
+      '<div style="font-size:12px;color:var(--text-3);">Для этого адреса двор не заведён в «Территории»</div>'+
+    '</div>';
+  } else {
+    const pdtDone=p.done||0;
+    const pdtTot=p.total!=null?p.total:((p.done||0)+(p.missed||0));
+    const pdtPct=p.pct!=null?p.pct:(pdtTot>0?Math.round(pdtDone/pdtTot*100):0);
+    html+='<div class="detail-block">'+
+      '<div class="detail-ch">'+
+        '<span class="detail-ch-title"><span class="chev">▾</span> 🧤 ПДТ (территория)</span>'+
+        '<span>'+pdtDone+'/'+pdtTot+' · '+pill(pdtPct,pdtTot)+'</span>'+
+      '</div>'+
+      '<div class="detail-body">'+bar(pdtPct,pdtTot)+
+        (pdtTot>0
+          ? '<div style="font-size:12px;color:var(--text-3);">Сумма по дням '+periodLbl+'</div>'
+          : '<div style="font-size:12px;color:var(--text-3);">Нет задач ПДТ '+periodLbl+'</div>')+
+      '</div></div>';
+  }
+
+  html+='</div>'+
+    '<div style="font-size:12px;color:var(--text-3);margin-top:12px;">'+
+      'Списки задач и секции — в режимах «Сегодня» и «Вчера».'+
+    '</div>';
+  return html;
+}
+
 function selectHouse(id){
   selectedHouse=id; renderMap();
   const h=houseToday.find(x=>x.id===id);
@@ -459,10 +781,7 @@ function selectHouse(id){
   }
 
   if(isPeriodRangeMode()){
-    det.innerHTML=renderHouseDetailHeader(h, geo)+
-      '<div style="font-size:12px;color:var(--text-3);margin-top:12px;">'+
-        'Поминутная детализация МОП/ПДТ доступна для периодов «Сегодня» и «Вчера».'+
-      '</div>';
+    det.innerHTML=renderHouseDetailHeader(h, geo)+renderMopPdtPeriodSummary(h);
     return;
   }
 
@@ -485,10 +804,42 @@ async function loadHouseDetail(locationId, houseLabel){
     area.innerHTML = renderMopPdt(d);
     // Обновляем шапку детализации свежими данными (house_breakdown может быть закеширован)
     updateDetailHeader(d);
+    syncHouseMapFromDetail(d, locationId);
   }catch(e){
     if(area) area.innerHTML='<div style="color:var(--text-3);font-size:13px;">Не удалось загрузить детализацию.</div>';
     console.warn('house_detail:', e);
   }
+}
+
+/** Светофор дома: min(МОП%, ПДТ%) по зонам с задачами; счётчики — сумма МОП+ПДТ */
+function houseTrafficWorstOf(d){
+  const mop=d.mop||{};
+  const pdt=d.pdt||{};
+  const t=d.total||{};
+  const mopTot=mop.total!=null?mop.total:((mop.done||0)+(mop.missed||0));
+  const pdtTot=pdt.total!=null?pdt.total:((pdt.done||0)+(pdt.missed||0));
+  const pcts=[];
+  if(mopTot>0) pcts.push(mop.pct!=null?mop.pct:Math.round((mop.done||0)/mopTot*100));
+  if(pdtTot>0) pcts.push(pdt.pct!=null?pdt.pct:Math.round((pdt.done||0)/pdtTot*100));
+  const done=t.done!=null?t.done:((mop.done||0)+(pdt.done||0));
+  const total=t.total!=null?t.total:(done+(t.missed!=null?t.missed:((mop.missed||0)+(pdt.missed||0))));
+  const pct=t.pct!=null?t.pct:(pcts.length?Math.min(...pcts):(total>0?Math.round(done/total*100):100));
+  const status=t.status||trafficLevel(pct,total);
+  return {done,total,pct,status};
+}
+
+function syncHouseMapFromDetail(d, locationId){
+  if(isPeriodRangeMode()||!selectedHouse) return;
+  const st=houseTrafficWorstOf(d);
+  const idx=houseToday.findIndex(h=>h.id===selectedHouse||h.locationId===locationId);
+  if(idx<0) return;
+  const h=houseToday[idx];
+  houseToday[idx]={
+    ...h, pct:st.pct, status:st.status, tasks:st.total, closed:st.done,
+    mop:d.mop||h.mop, pdt:d.pdt||h.pdt,
+  };
+  renderMap();
+  renderHouseTable();
 }
 
 function updateDetailHeader(d){
@@ -497,15 +848,13 @@ function updateDetailHeader(d){
   const pillEl=det.querySelector('.pill');
   const countEl=det.querySelector('.detail-count');
   if(!pillEl && !countEl) return;
-  const t=d.total;
-  const pct = t.total>0 ? Math.round(t.done/t.total*100) : 100;
-  const status = trafficLevel(pct, t.total);
-  const stLabel = status==='ok'?'Выполнено':(status==='warn'?'Есть просрочки':'Критично');
-  const barColor = statusColor(status);
-  if(pillEl){ pillEl.className='pill '+status; pillEl.textContent=stLabel; }
-  if(countEl){ countEl.innerHTML=t.done+'/'+t.total+' задач · <b style="color:'+barColor+'">'+pct+'%</b>'; }
+  const st=houseTrafficWorstOf(d);
+  const stLabel=st.status==='ok'?'Выполнено':(st.status==='warn'?'Есть просрочки':'Критично');
+  const barColor=statusColor(st.status);
+  if(pillEl){ pillEl.className='pill '+st.status; pillEl.textContent=stLabel; }
+  if(countEl){ countEl.innerHTML=st.done+'/'+st.total+' задач · <b style="color:'+barColor+'">'+st.pct+'%</b>'; }
   const barEl=det.querySelector('.detail-bar-fill');
-  if(barEl){ barEl.style.width=pct+'%'; barEl.style.background=barColor; }
+  if(barEl){ barEl.style.width=st.pct+'%'; barEl.style.background=barColor; }
 }
 
 function escHtml(s){
@@ -684,6 +1033,7 @@ document.getElementById('period-seg').addEventListener('click',e=>{
   loadPeriod(period);
   updateHousePeriodUI();
   if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
+  loadDayTasks();
 });
 
 // Загружаем данные за произвольный период
@@ -706,6 +1056,8 @@ async function loadPeriod(p){
     renderKPI(); renderCharts();
     setStatus('✓ '+periodCache[cacheKey].suffix);
     renderShifts();
+    if(isDayMode()) prefetchTaskBreakdown();
+    loadDayTasks();
     if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
     return;
   }
@@ -729,6 +1081,7 @@ async function loadPeriod(p){
     }
 
     const t=d.tasks;
+    const planned=(t.planned!=null)?t.planned:((t.available||0)+(t.pending||0));
     // Формируем подпись периода
     let suffix='';
     if(p==='today')     suffix='сегодня, '+fmtDate(d.date||dateParam);
@@ -737,7 +1090,7 @@ async function loadPeriod(p){
     else if(p==='30')   suffix='текущий месяц';
 
     periodData={
-      tasks:t.total, closed:t.done, inProgress:t.in_progress||0,
+      tasks:t.total, closed:t.done, planned, inProgress:t.in_progress||0,
       missed:t.missed||0, rate:t.rate, suffix,
       hourly: (action==='dashboard' && d.tasks.hourly) ? d.tasks.hourly : null,
       hourlyHours: (action==='dashboard' && d.tasks.hourly_hours) ? d.tasks.hourly_hours : null,
@@ -748,25 +1101,40 @@ async function loadPeriod(p){
 
     renderKPI(); renderCharts();
     setStatus('✓ Данные обновлены · '+suffix);
+    if(isDayMode()) prefetchTaskBreakdown();
   }catch(e){
     setStatus('⚠ Ошибка: '+e.message);
     console.error('loadPeriod:', e);
   }
   renderShifts();
   updateHousePeriodUI();
+  loadDayTasks();
   if(isDayMode()||isPeriodRangeMode()) loadHouseBreakdown();
 }
 async function loadToday(){
   await loadPeriod('today');
-  loadHouseBreakdown();
 }
 
 // Загрузка детализации по домам (может занять 10-20 сек — много API-вызовов)
 async function loadHouseBreakdown(){
   updateHousePeriodUI();
   const dateParam=houseDateParam();
+  const cacheKey=period+':'+dateParam;
   const timeoutMs=isPeriodRangeMode()?300000:120000;
   const tb=document.querySelector('#b-rating #house-body');
+  if(houseBreakdownCache[cacheKey] && houseBreakdownCache[cacheKey].length){
+    houseToday=houseBreakdownCache[cacheKey];
+    renderHouseTable();
+    renderPdtTable();
+    try{ renderMap(); }catch(e){ console.warn('renderMap:', e); }
+    if(selectedHouse) selectHouse(selectedHouse);
+    else if(isPeriodRangeMode()){
+      document.getElementById('house-detail').innerHTML=
+        '<div style="color:var(--text-3);font-size:13px;">Кликните по дому на карте — сводка за '+
+        (period==='7'?'неделю':'месяц')+' (сумма по дням).</div>';
+    }
+    return;
+  }
   if(tb) tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">⏳ Загрузка…</td></tr>';
   if(isPeriodRangeMode()){
     setStatus('Загрузка домов за период (сумма по дням)…');
@@ -835,6 +1203,75 @@ async function loadHistory(){
 }
 
 function setStatus(t){ statusEl.textContent=t; }
+
+const DAY_TASK_STATUS={new:'Новая',in_progress:'В работе',done:'Выполнена'};
+const DAY_TASK_SOURCE={telegram:'Telegram',platrum:'Platrum',manual:'Вручную'};
+
+async function loadDayTasks(){
+  const body=document.getElementById('day-tasks-body');
+  const hint=document.getElementById('day-tasks-period-hint');
+  if(!body) return;
+  if(isPeriodRangeMode()){
+    body.innerHTML='<div style="color:var(--text-3);font-size:13px;padding:8px 0;">Для недели и месяца демо-список скрыт. Выберите «Сегодня» или «Вчера».</div>';
+    if(hint) hint.textContent='';
+    return;
+  }
+  const dateParam=period==='today'?'today':(period==='yesterday'?'yesterday':getDateParam(period));
+  if(hint){
+    hint.textContent=period==='today'?' · сегодня':(period==='yesterday'?' · вчера':' · '+dateParam);
+  }
+  body.innerHTML='<div style="color:var(--text-3);font-size:13px;padding:8px 0;">⏳ Загрузка…</div>';
+  try{
+    const r=await fetch(PROXY+'?action=day_tasks&date='+encodeURIComponent(dateParam));
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    body.innerHTML=renderDayTasksHtml(d);
+    bindDayTasksHandlers();
+  }catch(e){
+    body.innerHTML='<div style="color:var(--red);font-size:13px;">Не удалось загрузить: '+escHtml(e.message)+'</div>';
+  }
+}
+
+function renderDayTasksHtml(d){
+  if(d.message){
+    return '<div style="color:var(--text-3);font-size:13px;">'+escHtml(d.message)+'</div>';
+  }
+  const tasks=d.tasks||[];
+  if(!tasks.length){
+    return '<div style="color:var(--text-3);font-size:13px;padding:8px 0;">Нет задач менеджера на выбранный день.</div>';
+  }
+  let html='<div style="overflow-x:auto;"><table class="day-tasks-table"><thead><tr>'+
+    '<th>Дом (адрес)</th><th>Задача</th><th>Статус</th><th>Источник</th><th>Срок</th><th>Постановщик</th>'+
+    '</tr></thead><tbody>';
+  tasks.forEach(t=>{
+    const st=t.status||'new';
+    const stCls=st==='done'?'ok':(st==='in_progress'?'warn':'');
+    const src=(t.source||'manual').toLowerCase();
+    const srcCls=src==='telegram'?'tg':(src==='platrum'?'platrum':'manual');
+    const hid=escHtml(t.house_id||'');
+    html+='<tr>'+
+      '<td><a href="#" class="house-link" data-house-id="'+hid+'">'+escHtml(t.house_label||t.house_id||'—')+'</a></td>'+
+      '<td>'+escHtml(t.title)+'</td>'+
+      '<td><span class="pill sm '+stCls+'">'+(DAY_TASK_STATUS[st]||st)+'</span></td>'+
+      '<td><span class="src-pill '+srcCls+'">'+(DAY_TASK_SOURCE[src]||src)+'</span></td>'+
+      '<td style="white-space:nowrap;color:var(--text-2);">'+escHtml(t.due_time||'—')+'</td>'+
+      '<td style="color:var(--text-3);font-size:12px;">'+escHtml(t.created_by||'—')+'</td>'+
+      '</tr>';
+  });
+  html+='</tbody></table></div>';
+  html+='<div style="font-size:11px;color:var(--text-3);margin-top:8px;">Всего: <b>'+tasks.length+'</b> · этап 0, демо-данные</div>';
+  return html;
+}
+
+function bindDayTasksHandlers(){
+  document.querySelectorAll('.day-tasks-table .house-link').forEach(a=>{
+    a.onclick=e=>{
+      e.preventDefault();
+      const id=a.dataset.houseId;
+      if(id) selectHouse(id);
+    };
+  });
+}
 
 // Автообновление каждые 5 минут
 setInterval(loadToday, 5*60*1000);
