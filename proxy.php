@@ -176,6 +176,64 @@ function normalize_report_date(string $date, DateTimeZone $tz, string $todayStr)
     return $date;
 }
 
+/** Задачи по локации (поддерево location=id*) */
+function count_location_tasks(string $date, int $locId, string $status): int {
+    $r = tb_get('/reports/tasks', [
+        'date'     => $date,
+        'project'  => TB_PROJECT,
+        'status'   => $status,
+        'location' => $locId . '*',
+        'limit'    => 250,
+    ]);
+    return count($r['data'] ?? []);
+}
+
+/**
+ * МОП дома: сумма по секциям (как в house_detail).
+ * Если секций нет — запрос по корню дома.
+ */
+function mop_stats_for_house(int $houseLocId, string $date, array $allLocs): array {
+    $sections = array_values(array_filter($allLocs, function ($l) use ($houseLocId) {
+        return (int)$l['parent_id'] === $houseLocId;
+    }));
+
+    $mopDone = 0;
+    $mopMiss = 0;
+    $zones   = [];
+
+    if ($sections) {
+        foreach ($sections as $sec) {
+            $sid = (int)$sec['id'];
+            $d   = count_location_tasks($date, $sid, 'done');
+            $m   = count_location_tasks($date, $sid, 'missed');
+            $mopDone += $d;
+            $mopMiss += $m;
+            $t = $d + $m;
+            $zones[] = [
+                'name' => $sec['name'], 'id' => $sid,
+                'done' => $d, 'missed' => $m, 'total' => $t,
+                'pct'  => $t > 0 ? round($d / $t * 100) : 0,
+            ];
+        }
+    } else {
+        $mopDone = count_location_tasks($date, $houseLocId, 'done');
+        $mopMiss = count_location_tasks($date, $houseLocId, 'missed');
+    }
+
+    return ['done' => $mopDone, 'missed' => $mopMiss, 'zones' => $zones];
+}
+
+/** ПДТ — двор из «Территории» */
+function pdt_stats_for_yard(?int $yardId, string $date): array {
+    if ($yardId === null) {
+        return ['done' => 0, 'missed' => 0];
+    }
+    return [
+        'done'   => count_location_tasks($date, $yardId, 'done'),
+        'missed' => count_location_tasks($date, $yardId, 'missed'),
+    ];
+}
+
 switch ($action) {
 
     // ----------------------------------------------------------
@@ -541,7 +599,7 @@ switch ($action) {
     //  ?action=house_breakdown&date=2026-05-29
     // ----------------------------------------------------------
     case 'house_breakdown':
-        set_time_limit(120);
+        set_time_limit(300);
         $date = normalize_report_date($_GET['date'] ?? $today, $tz_msk, $today);
         $cacheFile = sys_get_temp_dir() . '/tb_hb_' . TB_PROJECT . '_' . $date . '.json';
 
@@ -569,20 +627,14 @@ switch ($action) {
             $parts   = explode(' ', trim($locName), 2);
             $houseId = count($parts) > 1 ? $parts[1] : $locName;
 
-            // МОП — всё внутри дома (подъезды/этажи)
-            $done   = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$locId.'*','limit'=>250]);
-            $missed = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$locId.'*','limit'=>250]);
-            $mopDone = count($done['data'] ?? []);
-            $mopMiss = count($missed['data'] ?? []);
-
-            // ПДТ — двор этого дома из «Территории»
-            $pdtDone = 0; $pdtMiss = 0; $yardId = $yardMap[$houseId] ?? null;
-            if ($yardId !== null) {
-                $yd = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$yardId.'*','limit'=>250]);
-                $ym = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$yardId.'*','limit'=>250]);
-                $pdtDone = count($yd['data'] ?? []);
-                $pdtMiss = count($ym['data'] ?? []);
-            }
+            // МОП — по секциям (как house_detail); ПДТ — двор из «Территории»
+            $mop       = mop_stats_for_house((int)$locId, $date, $allLocs);
+            $mopDone   = $mop['done'];
+            $mopMiss   = $mop['missed'];
+            $yardId    = $yardMap[$houseId] ?? null;
+            $pdt       = pdt_stats_for_yard($yardId !== null ? (int)$yardId : null, $date);
+            $pdtDone   = $pdt['done'];
+            $pdtMiss   = $pdt['missed'];
 
             // Светофор дома = МОП + ПДТ вместе
             $dc = $mopDone + $pdtDone;
@@ -632,33 +684,16 @@ switch ($action) {
         if ($houseLoc) { $p = explode(' ', trim($houseLoc['name']), 2); $houseId = count($p)>1 ? $p[1] : $houseLoc['name']; }
         $yardId   = $yardMap[$houseId] ?? null;
 
-        // Секции (прямые дети дома)
-        $sections = array_values(array_filter($allLocs, function($l) use ($locId) {
-            return (int)$l['parent_id'] === $locId;
-        }));
+        $mop      = mop_stats_for_house($locId, $date, $allLocs);
+        $mopDone  = $mop['done'];
+        $mopMiss  = $mop['missed'];
+        $mopZones = $mop['zones'];
+        $mopTot   = $mopDone + $mopMiss;
 
-        // МОП = задачи по каждой секции (с wildcard = включая этажи)
-        $mopZones = []; $mopDone = 0; $mopMiss = 0;
-        foreach ($sections as $sec) {
-            $sd = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$sec['id'].'*','limit'=>250]);
-            $sm = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$sec['id'].'*','limit'=>250]);
-            $d  = count($sd['data'] ?? []);
-            $m  = count($sm['data'] ?? []);
-            $mopDone += $d; $mopMiss += $m;
-            $t  = $d + $m;
-            $mopZones[] = ['name'=>$sec['name'],'id'=>$sec['id'],'done'=>$d,'missed'=>$m,'total'=>$t,'pct'=> $t>0?round($d/$t*100):0];
-        }
-        $mopTot = $mopDone + $mopMiss;
-
-        // ПДТ = двор этого дома из «Территории»
-        $pdtDone = 0; $pdtMiss = 0;
-        if ($yardId !== null) {
-            $yd = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$yardId.'*','limit'=>250]);
-            $ym = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$yardId.'*','limit'=>250]);
-            $pdtDone = count($yd['data'] ?? []);
-            $pdtMiss = count($ym['data'] ?? []);
-        }
-        $pdtTot  = $pdtDone + $pdtMiss;
+        $pdt      = pdt_stats_for_yard($yardId !== null ? (int)$yardId : null, $date);
+        $pdtDone  = $pdt['done'];
+        $pdtMiss  = $pdt['missed'];
+        $pdtTot   = $pdtDone + $pdtMiss;
 
         $houseDone = $mopDone + $pdtDone;
         $houseMiss = $mopMiss + $pdtMiss;
