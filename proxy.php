@@ -1055,11 +1055,82 @@ switch ($action) {
         break;
 
     // ----------------------------------------------------------
+    //  Задачи менеджера на день (не ThroneBaron) — этап 0: демо JSON
+    //  ?action=day_tasks&date=today
+    // ----------------------------------------------------------
+    case 'day_tasks':
+        $rawDate = $_GET['date'] ?? 'today';
+        if (strpos($rawDate, ',') !== false) {
+            echo json_encode([
+                'demo'    => true,
+                'date'    => $rawDate,
+                'tasks'   => [],
+                'message' => 'Демо-блок доступен для «Сегодня» и «Вчера»',
+            ], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $date = normalize_report_date($rawDate, $tz_msk, $today);
+        $yesterday = (new DateTime($today, $tz_msk))->modify('-1 day')->format('Y-m-d');
+
+        $dataFile = __DIR__ . '/data/day_tasks_demo.json';
+        if (!is_readable($dataFile)) {
+            echo json_encode(['error' => 'demo data file not found', 'date' => $date], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $raw = json_decode(file_get_contents($dataFile), true);
+        $items = $raw['tasks'] ?? [];
+
+        $out = [];
+        foreach ($items as $t) {
+            $d = $t['date'] ?? 'today';
+            if ($d === 'today') {
+                $taskDate = $today;
+            } elseif ($d === 'yesterday') {
+                $taskDate = $yesterday;
+            } else {
+                $taskDate = $d;
+            }
+            if ($taskDate !== $date) {
+                continue;
+            }
+            $out[] = [
+                'id'          => $t['id'] ?? uniqid('mgr-', true),
+                'date'        => $taskDate,
+                'house_id'    => $t['house_id'] ?? '',
+                'house_label' => $t['house_label'] ?? $t['house_id'] ?? '—',
+                'title'       => $t['title'] ?? '',
+                'status'      => $t['status'] ?? 'new',
+                'source'      => $t['source'] ?? 'manual',
+                'created_by'  => $t['created_by'] ?? null,
+                'due_time'    => $t['due_time'] ?? null,
+            ];
+        }
+
+        usort($out, function ($a, $b) {
+            $order = ['new' => 0, 'in_progress' => 1, 'done' => 2];
+            $oa = $order[$a['status']] ?? 3;
+            $ob = $order[$b['status']] ?? 3;
+            if ($oa !== $ob) {
+                return $oa - $ob;
+            }
+            return strcmp($a['house_label'], $b['house_label']);
+        });
+
+        echo json_encode([
+            'demo'  => true,
+            'date'  => $date,
+            'total' => count($out),
+            'tasks' => $out,
+        ], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ----------------------------------------------------------
     //  Помощь: список доступных action
     // ----------------------------------------------------------
     default:
         echo json_encode([
             'endpoints' => [
+                '?action=day_tasks&date=today'  => 'Демо: задачи менеджера на день (не ThroneBaron)',
                 '?action=projects'              => 'Список проектов (найти project_id)',
                 '?action=dashboard&date=today'  => 'Все KPI за дату — основной запрос дашборда',
                 '?action=teams'                 => 'Команды проекта (= дома ЖК)',
