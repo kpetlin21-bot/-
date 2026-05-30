@@ -121,14 +121,14 @@
       <div style="font-size:13px; font-weight:500; color:var(--text-2); margin:6px 0 4px;"><i class="ti ti-spray"></i> Уборщицы</div>
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Дом</th><th>Сотрудник</th><th>План</th><th>Приход</th><th>Уход</th><th>Статус</th></tr></thead>
+          <thead><tr><th>Сотрудник</th><th>Приход</th><th>Уход</th><th>Статус</th></tr></thead>
           <tbody id="shift-cleaners"></tbody>
         </table>
       </div>
       <div style="font-size:13px; font-weight:500; color:var(--text-2); margin:14px 0 4px;"><i class="ti ti-shovel"></i> Дворники</div>
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Дом</th><th>Сотрудник</th><th>План</th><th>Приход</th><th>Уход</th><th>Статус</th></tr></thead>
+          <thead><tr><th>Сотрудник</th><th>Приход</th><th>Уход</th><th>Статус</th></tr></thead>
           <tbody id="shift-janitors"></tbody>
         </table>
       </div>
@@ -483,8 +483,11 @@ function renderShifts(){
     const list=sh.filter(s=>s.role===role);
     if(!list.length) return '<tr><td colspan="4" style="color:var(--text-3)">нет данных</td></tr>';
     return list.map(s=>{
-      const st=s.came?'Вышел':'Не вышел';
-      const cls=s.came?'ok':'absent';
+      // Не вышел — нет прихода; Вышел — пришёл, смена ещё идёт; Закончил смену — есть уход
+      let st, cls;
+      if(!s.came){ st='Не вышел'; cls='absent'; }       // красный
+      else if(s.out){ st='Закончил смену'; cls='ok'; }  // зелёный
+      else { st='Вышел'; cls='warn'; }                   // жёлтый
       return '<tr><td>'+s.name+'</td><td>'+(s.in||'—')+'</td><td>'+(s.out||'—')+'</td>'+
         '<td><span class="pill '+cls+'">'+st+'</span></td></tr>';
     }).join('');
