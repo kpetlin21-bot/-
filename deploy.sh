@@ -18,10 +18,17 @@ fi
 
 echo "=== Deploying to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH ==="
 
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
+  "mkdir -p ${REMOTE_PATH}data"
+
 scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
   "$DIR/index.html" \
   "$DIR/proxy.php" \
   "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
+
+scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+  "$DIR/data/day_tasks_demo.json" \
+  "$REMOTE_USER@$REMOTE_HOST:${REMOTE_PATH}data/"
 
 echo ""
 echo "=== Deploy complete! ==="
