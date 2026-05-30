@@ -552,6 +552,8 @@ switch ($action) {
             // Сам корень «Территория» не дом — его задачи раскладываются по дворам
             if ($terrId !== null && (int)$locId === (int)$terrId) continue;
             $locName = $loc['name'];
+            // Нежилые локации (офис) не показываем как дом
+            if (strpos($locName, 'Офис') !== false) continue;
             $parts   = explode(' ', trim($locName), 2);
             $houseId = count($parts) > 1 ? $parts[1] : $locName;
 
