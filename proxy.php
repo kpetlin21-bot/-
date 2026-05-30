@@ -164,6 +164,18 @@ $action = $_GET['action'] ?? 'help';
 $tz_msk = new DateTimeZone('Europe/Moscow');
 $today  = (new DateTime('now', $tz_msk))->format('Y-m-d');
 
+/** today/yesterday → Y-m-d (MSK); иначе дата как есть */
+function normalize_report_date(string $date, DateTimeZone $tz, string $todayStr): string {
+    $d = strtolower(trim($date));
+    if ($d === 'today') {
+        return $todayStr;
+    }
+    if ($d === 'yesterday') {
+        return (new DateTime($todayStr, $tz))->modify('-1 day')->format('Y-m-d');
+    }
+    return $date;
+}
+
 switch ($action) {
 
     // ----------------------------------------------------------
@@ -530,7 +542,7 @@ switch ($action) {
     // ----------------------------------------------------------
     case 'house_breakdown':
         set_time_limit(120);
-        $date = $_GET['date'] ?? $today;
+        $date = normalize_report_date($_GET['date'] ?? $today, $tz_msk, $today);
         $cacheFile = sys_get_temp_dir() . '/tb_hb_' . TB_PROJECT . '_' . $date . '.json';
 
         if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
@@ -608,7 +620,7 @@ switch ($action) {
         set_time_limit(120);
         $locId = (int)($_GET['location_id'] ?? 0);
         if (!$locId) { echo json_encode(['error'=>'location_id required']); break; }
-        $date = $_GET['date'] ?? $today;
+        $date = normalize_report_date($_GET['date'] ?? $today, $tz_msk, $today);
 
         $allLocs  = get_all_locations();
         $yardMap  = get_yard_map($allLocs);

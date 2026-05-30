@@ -655,13 +655,13 @@ async function loadToday(){
 
 // Загрузка детализации по домам (может занять 10-20 сек — много API-вызовов)
 async function loadHouseBreakdown(){
-  const today=mskToday();
+  const dateParam=(period==='today'||period==='yesterday')?getDateParam(period):mskToday();
   const tb=document.querySelector('#b-rating #house-body');
   if(tb) tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">⏳ Загрузка…</td></tr>';
   try{
     document.getElementById('house-detail').innerHTML=
       '<div style="color:var(--text-3);font-size:13px;">⏳ Загрузка детализации по домам…</div>';
-    const r=await fetchWithTimeout(PROXY+'?action=house_breakdown&date=today', 120000);
+    const r=await fetchWithTimeout(PROXY+'?action=house_breakdown&date='+encodeURIComponent(dateParam), 120000);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     if(d.houses && d.houses.length){
@@ -687,7 +687,7 @@ async function loadHouseBreakdown(){
       }
     } else if(tb) {
       houseToday=[];
-      tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">Нет задач по домам за '+today+'</td></tr>';
+      tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">Нет задач по домам за '+dateParam+'</td></tr>';
       renderPdtTable();
     }
   }catch(e){
