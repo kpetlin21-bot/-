@@ -164,6 +164,20 @@ $action = $_GET['action'] ?? 'help';
 $tz_msk = new DateTimeZone('Europe/Moscow');
 $today  = (new DateTime('now', $tz_msk))->format('Y-m-d');
 
+/** Светофор: 100% ok, 80–99% warn, ≤79% crit */
+function traffic_status(int $pct, int $total = -1): string {
+    if ($total === 0) {
+        return 'ok';
+    }
+    if ($pct >= 100) {
+        return 'ok';
+    }
+    if ($pct >= 80) {
+        return 'warn';
+    }
+    return 'crit';
+}
+
 /** today/yesterday → Y-m-d (MSK); иначе дата как есть */
 function normalize_report_date(string $date, DateTimeZone $tz, string $todayStr): string {
     $d = strtolower(trim($date));
@@ -739,7 +753,7 @@ switch ($action) {
             $mc = $mopMiss + $pdtMiss;
             $total = $dc + $mc;
             $rate  = $total > 0 ? round($dc/$total*100) : 100; // нет задач = 100%
-            $status = $total === 0 ? 'ok' : ($rate>=90 ? 'ok' : ($rate>=70 ? 'warn' : 'crit'));
+            $status = traffic_status($rate, $total);
 
             $mopTot = $mopDone + $mopMiss;
             $pdtTot = $pdtDone + $pdtMiss;
