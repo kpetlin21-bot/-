@@ -209,6 +209,57 @@ switch ($action) {
         echo $result;
         break;
 
+    // ----------------------------------------------------------
+    //  История выполнения по дням (замена облачным снимкам).
+    //  Строится прямо из ThroneBaron: по дню считаем total/done/missed/rate.
+    //  Прошедшие дни кешируются надолго (сутки), сегодня — на 15 минут,
+    //  поэтому повторные запросы быстрые.
+    //  ?action=history&days=30
+    // ----------------------------------------------------------
+    case 'history':
+        set_time_limit(180);
+        $tz       = new DateTimeZone('Europe/Moscow');
+        $now      = new DateTime('now', $tz);
+        $todayStr = $now->format('Y-m-d');
+        $days     = (int)($_GET['days'] ?? 30);
+        if ($days < 1)  $days = 30;
+        if ($days > 60) $days = 60;
+
+        $out = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $d = (clone $now)->modify("-{$i} day")->format('Y-m-d');
+            $isToday   = ($d === $todayStr);
+            $dayCache  = sys_get_temp_dir() . '/tb_day_' . TB_PROJECT . '_' . $d . '.json';
+            $ttl       = $isToday ? 900 : 86400;
+
+            $rec = null;
+            if (file_exists($dayCache) && (time() - filemtime($dayCache)) < $ttl) {
+                $rec = json_decode(file_get_contents($dayCache), true);
+            }
+            if ($rec === null) {
+                $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => TB_PROJECT]);
+                $tot = count($tasks); $dn = 0; $ms = 0;
+                foreach ($tasks as $t) {
+                    $st = $t['status'] ?? '';
+                    if      ($st === 'done')   $dn++;
+                    elseif  ($st === 'missed') $ms++;
+                }
+                $rec = [
+                    'date'   => $d,
+                    'tasks'  => $tot,
+                    'closed' => $dn,
+                    'missed' => $ms,
+                    'rate'   => $tot > 0 ? round($dn / $tot * 100) : 0,
+                ];
+                if ($tot > 0) file_put_contents($dayCache, json_encode($rec));
+            }
+            // Пропускаем дни без задач (выходные/нет плана) — не засоряют график
+            if (($rec['tasks'] ?? 0) > 0) $out[] = $rec;
+        }
+
+        echo json_encode(['days' => $days, 'history' => $out], JSON_UNESCAPED_UNICODE);
+        break;
+
 
     case 'dashboard':
         $tz   = new DateTimeZone('Europe/Moscow');
@@ -250,14 +301,27 @@ switch ($action) {
         // % как в ThroneBaron: выполнено / всего
         $rate = $totalCnt > 0 ? round($doneCnt / $totalCnt * 100) : 0;
 
-        // Почасовой разбор: реальное время выполнения из started_at (UTC -> MSK +3)
+        // Почасовой разбор выполнения (started_at, UTC -> MSK +3).
+        // Считаем ВСЕ выполненные задачи (status === 'done'):
+        //   - есть started_at -> попадает в свой час; время за пределами рабочего
+        //     окна 8..20 прижимается к ближайшей границе, чтобы задача не потерялась;
+        //   - нет started_at -> учитывается отдельным счётчиком $doneNoTime.
+        // Гарантия: sum($hourlyData) + $doneNoTime === $doneCnt.
         $hourlyData  = array();
         $hourlyHours = array(8,9,10,11,12,13,14,15,16,17,18,19,20);
         foreach ($hourlyHours as $hh) { $hourlyData[$hh] = 0; }
+        $hMin = $hourlyHours[0];
+        $hMax = $hourlyHours[count($hourlyHours) - 1];
+        $doneNoTime = 0;
         foreach ($allTasks as $t) {
-            if (isset($t['status']) && $t['status'] === 'done' && !empty($t['started_at'])) {
+            if (($t['status'] ?? '') !== 'done') continue;
+            if (!empty($t['started_at'])) {
                 $hh = (int)date('H', strtotime($t['started_at']) + 10800);
-                if ($hh >= 8 && $hh <= 20) { $hourlyData[$hh]++; }
+                if ($hh < $hMin) $hh = $hMin;
+                if ($hh > $hMax) $hh = $hMax;
+                $hourlyData[$hh]++;
+            } else {
+                $doneNoTime++;
             }
         }
 
@@ -299,8 +363,9 @@ switch ($action) {
                 'available'   => $availableCnt,
                 'pending'     => $pendingCnt,
                 'rate'        => $rate,
-                'hourly'       => array_values($hourlyData),
-                'hourly_hours' => $hourlyHours,
+                'hourly'        => array_values($hourlyData),
+                'hourly_hours'  => $hourlyHours,
+                'hourly_notime' => $doneNoTime,
             ],
             'staff'  => ['total' => $staffTotal, 'came' => $came, 'absent' => $staffTotal - $came],
             'shifts' => $shiftsFormatted,
