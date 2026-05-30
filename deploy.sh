@@ -18,10 +18,17 @@ fi
 
 echo "=== Deploying to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH ==="
 
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
+  "mkdir -p ${REMOTE_PATH}data"
+
 scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
   "$DIR/index.html" \
   "$DIR/proxy.php" \
   "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
+
+scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+  "$DIR/data/day_tasks_demo.json" \
+  "$REMOTE_USER@$REMOTE_HOST:${REMOTE_PATH}data/"
 
 echo ""
 echo "=== Deploy complete! ==="
@@ -29,3 +36,9 @@ ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
   "ls -lh ${REMOTE_PATH}index.html ${REMOTE_PATH}proxy.php"
 echo "Dashboard: https://api.cleansyst.ru/index.html"
 echo "Proxy:     https://api.cleansyst.ru/proxy.php?action=help"
+
+echo ""
+echo "=== Warming day cache (scope=day) ==="
+curl -sS -m 180 "https://api.cleansyst.ru/proxy.php?action=warmup_cache&secret=cleansyst2026&scope=day" \
+  | head -c 1200 || echo "(warmup skipped or timed out — run manually)"
+echo ""

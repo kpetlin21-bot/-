@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "description": "Демо: задачи менеджера объекта (не ThroneBaron). date: today | yesterday",
+  "tasks": [
+    {
+      "id": "mgr-001",
+      "date": "today",
+      "house_id": "43к3",
+      "house_label": "Загородная 43к3",
+      "title": "Встретить представителя УК у подъезда 2",
+      "status": "in_progress",
+      "source": "telegram",
+      "created_by": "Петлин К.",
+      "due_time": "11:00"
+    },
+    {
+      "id": "mgr-002",
+      "date": "today",
+      "house_id": "34к1",
+      "house_label": "Севастьянова 34к1",
+      "title": "Проверить работу домофона в секции 3",
+      "status": "new",
+      "source": "platrum",
+      "created_by": "Менеджер объекта",
+      "due_time": "15:30"
+    },
+    {
+      "id": "mgr-003",
+      "date": "today",
+      "house_id": "30к1",
+      "house_label": "Севастьянова 30к1",
+      "title": "Согласовать доступ бригады к кровле",
+      "status": "new",
+      "source": "telegram",
+      "created_by": "Петлин К.",
+      "due_time": "до 18:00"
+    },
+    {
+      "id": "mgr-004",
+      "date": "today",
+      "house_id": "28к1",
+      "house_label": "Севастьянова 28к1",
+      "title": "Замена ламп в холле 1 этажа (заявка жителя)",
+      "status": "done",
+      "source": "platrum",
+      "created_by": "Менеджер объекта",
+      "due_time": "10:00"
+    },
+    {
+      "id": "mgr-005",
+      "date": "today",
+      "house_id": "12",
+      "house_label": "Балканская 12",
+      "title": "Контроль вывоза строительного мусора у парковки",
+      "status": "in_progress",
+      "source": "manual",
+      "created_by": "Диспетчер",
+      "due_time": "16:00"
+    },
+    {
+      "id": "mgr-006",
+      "date": "today",
+      "house_id": "45к4",
+      "house_label": "Загородная 45к4",
+      "title": "Фотоотчёт по жалобе на лифт",
+      "status": "new",
+      "source": "telegram",
+      "created_by": "Петлин К.",
+      "due_time": null
+    },
+    {
+      "id": "mgr-007",
+      "date": "yesterday",
+      "house_id": "43к5",
+      "house_label": "Загородная 43к5",
+      "title": "Передать ключи подрядчику (закрыто)",
+      "status": "done",
+      "source": "telegram",
+      "created_by": "Петлин К.",
+      "due_time": "09:00"
+    },
+    {
+      "id": "mgr-008",
+      "date": "yesterday",
+      "house_id": "32к2",
+      "house_label": "Севастьянова 32к2",
+      "title": "Уточнить график мойки окон",
+      "status": "done",
+      "source": "platrum",
+      "created_by": "Менеджер объекта",
+      "due_time": null
+    }
+  ]
+}
