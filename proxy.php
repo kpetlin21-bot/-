@@ -192,7 +192,9 @@ switch ($action) {
 
         if ($nocache && file_exists($cacheFile)) { unlink($cacheFile); }
 
-        if (!$nocache && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
+        // TTL 65 минут: почасовой warmup_cache всегда обновляет кеш раньше,
+        // поэтому неделя/месяц отдаются мгновенно из кеша.
+        if (!$nocache && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3900) {
             header('X-Cache: HIT');
             echo file_get_contents($cacheFile);
             break;
@@ -273,6 +275,86 @@ switch ($action) {
         }
 
         echo json_encode(['days' => $days, 'history' => $out], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ----------------------------------------------------------
+    //  Прогрев кеша (вызывается cron-ом раз в час).
+    //  Заранее считает неделю и месяц (period_tasks) и историю по дням,
+    //  чтобы пользовательские запросы отдавались из кеша без задержки.
+    //  ?action=warmup_cache&secret=cleansyst2026
+    // ----------------------------------------------------------
+    case 'warmup_cache':
+        if (($_GET['secret'] ?? '') !== 'cleansyst2026') {
+            http_response_code(403);
+            echo json_encode(['error' => 'forbidden']);
+            break;
+        }
+        set_time_limit(300);
+        $tz       = new DateTimeZone('Europe/Moscow');
+        $now      = new DateTime('now', $tz);
+        $todayStr = $now->format('Y-m-d');
+
+        // Текущая неделя (с понедельника) и текущий месяц
+        $monday = (clone $now);
+        $monday->modify('-' . ((int)$monday->format('N') - 1) . ' day');
+        $weekRange    = $monday->format('Y-m-d') . ',' . $todayStr;
+        $firstOfMonth = (clone $now)->modify('first day of this month')->format('Y-m-d');
+        $monthRange   = $firstOfMonth . ',' . $todayStr;
+
+        $report = [];
+        foreach (['week' => $weekRange, 'month' => $monthRange] as $label => $range) {
+            $complete = true;
+            $allTasks = tb_get_all('/reports/tasks', ['date' => $range, 'project' => TB_PROJECT], $complete);
+            $totalCnt = count($allTasks);
+            $doneCnt = 0; $inProgressCnt = 0; $missedCnt = 0;
+            foreach ($allTasks as $t) {
+                $st = $t['status'] ?? '';
+                if      ($st === 'done')        $doneCnt++;
+                elseif  ($st === 'in_progress') $inProgressCnt++;
+                elseif  ($st === 'missed')      $missedCnt++;
+            }
+            $rate = $totalCnt > 0 ? round($doneCnt / $totalCnt * 100) : 0;
+            $result = json_encode([
+                'date'  => $range,
+                'tasks' => ['total'=>$totalCnt,'done'=>$doneCnt,'in_progress'=>$inProgressCnt,'missed'=>$missedCnt,'rate'=>$rate],
+            ], JSON_UNESCAPED_UNICODE);
+            // Тот же путь кеша, что и в period_tasks
+            $ptCache = sys_get_temp_dir() . '/tb_pt_' . TB_PROJECT . '_' . md5($range) . '.json';
+            $cached = false;
+            if ($complete && $totalCnt > 0) { file_put_contents($ptCache, $result); $cached = true; }
+            $report[$label] = ['range'=>$range,'total'=>$totalCnt,'done'=>$doneCnt,'complete'=>$complete,'cached'=>$cached];
+        }
+
+        // Прогрев истории по дням (тот же per-day кеш, что и в action=history)
+        $histWarmed = 0;
+        for ($i = 29; $i >= 0; $i--) {
+            $d        = (clone $now)->modify("-{$i} day")->format('Y-m-d');
+            $isToday  = ($d === $todayStr);
+            $dayCache = sys_get_temp_dir() . '/tb_day_' . TB_PROJECT . '_' . $d . '.json';
+            $ttl      = $isToday ? 900 : 86400;
+            if (file_exists($dayCache) && (time() - filemtime($dayCache)) < $ttl) continue;
+            $complete = true;
+            $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => TB_PROJECT], $complete);
+            $tot = count($tasks); $dn = 0; $ms = 0;
+            foreach ($tasks as $t) {
+                $st = $t['status'] ?? '';
+                if      ($st === 'done')   $dn++;
+                elseif  ($st === 'missed') $ms++;
+            }
+            if ($complete && $tot > 0) {
+                file_put_contents($dayCache, json_encode([
+                    'date'=>$d,'tasks'=>$tot,'closed'=>$dn,'missed'=>$ms,
+                    'rate'=>round($dn / $tot * 100),
+                ]));
+                $histWarmed++;
+            }
+        }
+
+        echo json_encode([
+            'warmed'              => $report,
+            'history_days_warmed' => $histWarmed,
+            'ts'                  => $now->format('Y-m-d H:i:s'),
+        ], JSON_UNESCAPED_UNICODE);
         break;
 
 
