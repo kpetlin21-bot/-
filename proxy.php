@@ -192,7 +192,7 @@ function count_location_tasks(string $date, int $locId, string $status): int {
  * МОП дома: сумма по секциям (как в house_detail).
  * Если секций нет — запрос по корню дома.
  */
-function mop_stats_for_house(int $houseLocId, string $date, array $allLocs): array {
+function mop_stats_for_house(int $houseLocId, string $date, array $allLocs, bool $withTasks = false): array {
     $sections = array_values(array_filter($allLocs, function ($l) use ($houseLocId) {
         return (int)$l['parent_id'] === $houseLocId;
     }));
@@ -201,26 +201,49 @@ function mop_stats_for_house(int $houseLocId, string $date, array $allLocs): arr
     $mopMiss = 0;
     $zones   = [];
 
+    $rootTasks = [];
+
     if ($sections) {
         foreach ($sections as $sec) {
             $sid = (int)$sec['id'];
-            $d   = count_location_tasks($date, $sid, 'done');
-            $m   = count_location_tasks($date, $sid, 'missed');
+            if ($withTasks) {
+                $bundle  = location_tasks_bundle($sid, $date);
+                $d       = $bundle['done'];
+                $m       = $bundle['missed'];
+                $zones[] = [
+                    'name' => $sec['name'], 'id' => $sid,
+                    'done' => $d, 'missed' => $m, 'total' => $bundle['total'],
+                    'pct'  => $bundle['pct'], 'tasks' => $bundle['tasks'],
+                ];
+            } else {
+                $d = count_location_tasks($date, $sid, 'done');
+                $m = count_location_tasks($date, $sid, 'missed');
+                $zones[] = [
+                    'name' => $sec['name'], 'id' => $sid,
+                    'done' => $d, 'missed' => $m, 'total' => $d + $m,
+                    'pct'  => ($d + $m) > 0 ? round($d / ($d + $m) * 100) : 0,
+                ];
+            }
             $mopDone += $d;
             $mopMiss += $m;
-            $t = $d + $m;
-            $zones[] = [
-                'name' => $sec['name'], 'id' => $sid,
-                'done' => $d, 'missed' => $m, 'total' => $t,
-                'pct'  => $t > 0 ? round($d / $t * 100) : 0,
-            ];
         }
     } else {
-        $mopDone = count_location_tasks($date, $houseLocId, 'done');
-        $mopMiss = count_location_tasks($date, $houseLocId, 'missed');
+        if ($withTasks) {
+            $bundle    = location_tasks_bundle($houseLocId, $date);
+            $mopDone   = $bundle['done'];
+            $mopMiss   = $bundle['missed'];
+            $rootTasks = $bundle['tasks'];
+        } else {
+            $mopDone = count_location_tasks($date, $houseLocId, 'done');
+            $mopMiss = count_location_tasks($date, $houseLocId, 'missed');
+        }
     }
 
-    return ['done' => $mopDone, 'missed' => $mopMiss, 'zones' => $zones];
+    $out = ['done' => $mopDone, 'missed' => $mopMiss, 'zones' => $zones];
+    if ($withTasks && $rootTasks) {
+        $out['tasks'] = $rootTasks;
+    }
+    return $out;
 }
 
 /** ПДТ — двор из «Территории» */
@@ -255,9 +278,9 @@ function format_report_task_row(array $t): array {
     ];
 }
 
-/** Список задач ПДТ по двору — для раскрытия в детализации дома */
-function pdt_task_list(int $yardId, string $date): array {
-    $raw = fetch_location_tasks_raw($date, $yardId);
+/** Список задач по локации (секция, двор, дом) */
+function location_task_list(int $locId, string $date): array {
+    $raw = fetch_location_tasks_raw($date, $locId);
     $order = ['done' => 0, 'in_progress' => 1, 'pending' => 2, 'available' => 3, 'missed' => 4];
     usort($raw, function ($a, $b) use ($order) {
         $sa = $a['status'] ?? '';
@@ -285,6 +308,28 @@ function pdt_task_list(int $yardId, string $date): array {
         $items[] = format_report_task_row($t);
     }
     return $items;
+}
+
+/** Задачи + агрегаты done/missed/total для одной локации */
+function location_tasks_bundle(int $locId, string $date): array {
+    $tasks  = location_task_list($locId, $date);
+    $done   = 0;
+    $missed = 0;
+    foreach ($tasks as $t) {
+        if (($t['status'] ?? '') === 'done') {
+            $done++;
+        } elseif (($t['status'] ?? '') === 'missed') {
+            $missed++;
+        }
+    }
+    $total = $done + $missed;
+    return [
+        'tasks'  => $tasks,
+        'done'   => $done,
+        'missed' => $missed,
+        'total'  => $total,
+        'pct'    => $total > 0 ? round($done / $total * 100) : 0,
+    ];
 }
 
 switch ($action) {
@@ -737,20 +782,27 @@ switch ($action) {
         if ($houseLoc) { $p = explode(' ', trim($houseLoc['name']), 2); $houseId = count($p)>1 ? $p[1] : $houseLoc['name']; }
         $yardId   = $yardMap[$houseId] ?? null;
 
-        $mop      = mop_stats_for_house($locId, $date, $allLocs);
+        $mop      = mop_stats_for_house($locId, $date, $allLocs, true);
         $mopDone  = $mop['done'];
         $mopMiss  = $mop['missed'];
         $mopZones = $mop['zones'];
         $mopTot   = $mopDone + $mopMiss;
+        $mopOut   = [
+            'done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,
+            'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0,'zones'=>$mopZones,
+        ];
+        if (!empty($mop['tasks'])) {
+            $mopOut['tasks'] = $mop['tasks'];
+        }
 
-        $pdt      = pdt_stats_for_yard($yardId !== null ? (int)$yardId : null, $date);
-        $pdtDone  = $pdt['done'];
-        $pdtMiss  = $pdt['missed'];
-        $pdtTot   = $pdtDone + $pdtMiss;
-        $pdtTasks = [];
+        $pdtDone = 0; $pdtMiss = 0; $pdtTot = 0; $pdtTasks = [];
         $pdtYardName = null;
         if ($yardId !== null) {
-            $pdtTasks = pdt_task_list((int)$yardId, $date);
+            $pdtBundle   = location_tasks_bundle((int)$yardId, $date);
+            $pdtDone     = $pdtBundle['done'];
+            $pdtMiss     = $pdtBundle['missed'];
+            $pdtTot      = $pdtBundle['total'];
+            $pdtTasks    = $pdtBundle['tasks'];
             foreach ($allLocs as $l) {
                 if ((int)$l['id'] === (int)$yardId) {
                     $pdtYardName = $l['name'] ?? null;
@@ -767,7 +819,7 @@ switch ($action) {
             'date'   => $date,
             'locId'  => $locId,
             'total'  => ['done'=>$houseDone,'missed'=>$houseMiss,'total'=>$houseTot],
-            'mop'    => ['done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0,'zones'=>$mopZones],
+            'mop'    => $mopOut,
             'pdt'    => [
                 'done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,
                 'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,

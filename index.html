@@ -67,6 +67,13 @@
   .detail-tasks{margin-top:10px; font-size:12px;}
   .detail-tasks th,.detail-tasks td{padding:6px 8px;}
   .pill.sm{font-size:11px; padding:1px 7px;}
+  .detail-zone-block{background:var(--surface); border-radius:7px; padding:8px 10px; margin-bottom:6px;}
+  .detail-zone-block:last-child{margin-bottom:0;}
+  .detail-zone-block .detail-ch{margin-bottom:6px; font-size:12px;}
+  .detail-zone-block.collapsed .detail-ch{margin-bottom:0;}
+  .detail-zone-block.collapsed .detail-body{display:none;}
+  .detail-zone-bar{height:3px; background:var(--surface-2); border-radius:2px; margin-bottom:8px;}
+  .detail-zone-bar>div{height:100%; border-radius:2px;}
 </style>
 </head>
 <body>
@@ -469,6 +476,17 @@ function taskStatusPill(st){
   return '<span class="pill sm '+cls+'">'+escHtml(lbl)+'</span>';
 }
 
+function renderTaskTable(tasks){
+  if(!tasks || !tasks.length){
+    return '<div style="font-size:12px;color:var(--text-3);">Нет задач за выбранный день</div>';
+  }
+  return '<div style="overflow-x:auto;"><table class="detail-tasks"><thead><tr>'+
+    '<th>Задача</th><th>Статус</th><th>Время</th></tr></thead><tbody>'+
+    tasks.map(t=>'<tr><td>'+escHtml(t.name)+'</td><td>'+taskStatusPill(t.status)+'</td>'+
+      '<td style="color:var(--text-2);white-space:nowrap;">'+escHtml(t.time||'—')+'</td></tr>').join('')+
+    '</tbody></table></div>';
+}
+
 function renderMopPdt(d){
   function pill(pct){ const col=pct>=90?'var(--green)':(pct>=70?'var(--amber)':'var(--red)'); return '<span style="color:'+col+';font-weight:500;">'+pct+'%</span>'; }
   function bar(pct){ const col=pct>=90?'#97C459':(pct>=70?'#EF9F27':'#E24B4A'); return '<div style="height:4px;background:var(--surface-2);border-radius:2px;margin:4px 0 8px;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px;"></div></div>'; }
@@ -488,17 +506,21 @@ function renderMopPdt(d){
     html+='<div style="display:grid;gap:6px;">';
     m.zones.forEach(z=>{
       const zCol=z.pct>=90?'#97C459':(z.pct>=70?'#EF9F27':'#E24B4A');
-      html+='<div style="background:var(--surface);border-radius:7px;padding:8px 10px;">'+
-        '<div style="display:flex;justify-content:space-between;font-size:12px;">'+
-          '<span style="color:var(--text-2);">'+escHtml(z.name)+'</span>'+
-          '<span>'+z.done+'/'+z.total+' · '+pill(z.pct)+'</span>'+
+      const tasks=z.tasks||[];
+      html+='<div class="detail-zone-block">'+
+        '<div class="detail-ch">'+
+          '<span class="detail-ch-title"><span class="chev">▾</span> '+escHtml(z.name)+'</span>'+
+          '<span style="color:var(--text-2);">'+z.done+'/'+z.total+' · '+pill(z.pct)+'</span>'+
         '</div>'+
-        '<div style="height:3px;background:var(--surface-2);border-radius:2px;margin-top:5px;">'+
-          '<div style="height:100%;width:'+z.pct+'%;background:'+zCol+';border-radius:2px;"></div>'+
+        '<div class="detail-body">'+
+          '<div class="detail-zone-bar"><div style="width:'+z.pct+'%;background:'+zCol+';"></div></div>'+
+          renderTaskTable(tasks)+
         '</div>'+
       '</div>';
     });
     html+='</div>';
+  } else if(m.tasks && m.tasks.length){
+    html+=renderTaskTable(m.tasks);
   } else {
     html+='<div style="font-size:12px;color:var(--text-3);">Секции не найдены</div>';
   }
@@ -520,11 +542,7 @@ function renderMopPdt(d){
     } else if(!tasks.length){
       tasksHtml='<div style="font-size:12px;color:var(--text-3);">Список задач недоступен</div>';
     } else {
-      tasksHtml='<div style="overflow-x:auto;"><table class="detail-tasks"><thead><tr>'+
-        '<th>Задача</th><th>Статус</th><th>Время</th></tr></thead><tbody>'+
-        tasks.map(t=>'<tr><td>'+escHtml(t.name)+'</td><td>'+taskStatusPill(t.status)+'</td><td style="color:var(--text-2);white-space:nowrap;">'+
-          escHtml(t.time||'—')+'</td></tr>').join('')+
-        '</tbody></table></div>';
+      tasksHtml=renderTaskTable(tasks);
     }
     html+='<div class="detail-block">'+
       '<div class="detail-ch">'+
@@ -770,6 +788,8 @@ document.querySelectorAll('h3.ch').forEach(h=>{
 document.getElementById('house-detail').addEventListener('click',e=>{
   const ch=e.target.closest('.detail-ch');
   if(!ch) return;
+  const zone=ch.closest('.detail-zone-block');
+  if(zone){ zone.classList.toggle('collapsed'); return; }
   const block=ch.closest('.detail-block');
   if(block) block.classList.toggle('collapsed');
 });
