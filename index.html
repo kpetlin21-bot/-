@@ -152,7 +152,7 @@
     <div class="cbody" id="b-pdt">
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Адрес (двор)</th><th>Выполнено</th><th>Пропущено</th><th>Выполнение</th></tr></thead>
+          <thead><tr><th>Адрес (двор)</th><th>Задач на день</th><th>Закрыто</th><th>Выполнение</th></tr></thead>
           <tbody id="pdt-body"></tbody>
         </table>
       </div>
@@ -564,7 +564,7 @@ function renderPdtTable(){
     if(p.total===0)
       return '<tr><td style="font-weight:500;">'+h.label+'</td><td>0</td><td>0</td><td style="color:var(--text-3)">нет задач</td></tr>';
     const col=p.pct>=90?'#97C459':(p.pct>=70?'#EF9F27':'#E24B4A');
-    return '<tr><td style="font-weight:500;">'+h.label+'</td><td>'+p.done+'</td><td>'+p.missed+'</td>'+
+    return '<tr><td style="font-weight:500;">'+h.label+'</td><td>'+p.total+'</td><td>'+p.done+'</td>'+
       '<td><span class="traffic"><span class="tdot" style="background:'+col+'"></span>'+p.pct+'%</span></td></tr>';
   }).join('');
 }
