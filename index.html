@@ -399,10 +399,10 @@ function selectHouse(id){
   det.innerHTML=
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'+
       '<span class="pill '+stCls+'">'+stLabel+'</span>'+
-      '<span style="font-size:13px;color:var(--text-2);">'+h.closed+'/'+h.tasks+' задач · <b style="color:'+barColor+'">'+h.pct+'%</b></span>'+
+      '<span class="detail-count" style="font-size:13px;color:var(--text-2);">'+h.closed+'/'+h.tasks+' задач · <b style="color:'+barColor+'">'+h.pct+'%</b></span>'+
     '</div>'+
     '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:16px;">'+
-      '<div style="height:100%;width:'+h.pct+'%;background:'+barColor+';border-radius:3px;"></div>'+
+      '<div class="detail-bar-fill" style="height:100%;width:'+h.pct+'%;background:'+barColor+';border-radius:3px;"></div>'+
     '</div>'+
     '<div id="mop-pdt-area"><div style="color:var(--text-3);font-size:13px;">⏳ Загружаю МОП и ПДТ…</div></div>';
 
@@ -420,10 +420,29 @@ async function loadHouseDetail(locationId, houseLabel){
     const d=await r.json();
     if(d.error){ area.innerHTML='<div style="color:var(--text-3);font-size:13px;">'+d.error+'</div>'; return; }
     area.innerHTML = renderMopPdt(d);
+    // Обновляем шапку детализации свежими данными (house_breakdown может быть закеширован)
+    updateDetailHeader(d);
   }catch(e){
     if(area) area.innerHTML='<div style="color:var(--text-3);font-size:13px;">Не удалось загрузить детализацию.</div>';
     console.warn('house_detail:', e);
   }
+}
+
+function updateDetailHeader(d){
+  const det=document.getElementById('house-detail');
+  if(!det) return;
+  const pillEl=det.querySelector('.pill');
+  const countEl=det.querySelector('.detail-count');
+  if(!pillEl && !countEl) return;
+  const t=d.total;
+  const pct = t.total>0 ? Math.round(t.done/t.total*100) : 100;
+  const status = t.total===0 ? 'ok' : (pct>=90?'ok':(pct>=70?'warn':'crit'));
+  const stLabel = status==='ok'?'Выполнено':(status==='warn'?'Есть просрочки':'Критично');
+  const barColor = statusColor(status);
+  if(pillEl){ pillEl.className='pill '+status; pillEl.textContent=stLabel; }
+  if(countEl){ countEl.innerHTML=t.done+'/'+t.total+' задач · <b style="color:'+barColor+'">'+pct+'%</b>'; }
+  const barEl=det.querySelector('.detail-bar-fill');
+  if(barEl){ barEl.style.width=pct+'%'; barEl.style.background=barColor; }
 }
 
 function renderMopPdt(d){

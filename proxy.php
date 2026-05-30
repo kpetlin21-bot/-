@@ -574,8 +574,8 @@ switch ($action) {
             $dc = $mopDone + $pdtDone;
             $mc = $mopMiss + $pdtMiss;
             $total = $dc + $mc;
-            $rate  = $total > 0 ? round($dc/$total*100) : 0;
-            $status = $rate>=90 ? 'ok' : ($rate>=70 ? 'warn' : 'crit');
+            $rate  = $total > 0 ? round($dc/$total*100) : 100; // нет задач = 100%
+            $status = $total === 0 ? 'ok' : ($rate>=90 ? 'ok' : ($rate>=70 ? 'warn' : 'crit'));
 
             $mopTot = $mopDone + $mopMiss;
             $pdtTot = $pdtDone + $pdtMiss;
