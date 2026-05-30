@@ -147,6 +147,18 @@
     </div>
   </div>
 
+  <div class="card collapsible">
+    <h3 class="ch" data-target="b-pdt"><span class="chev">▾</span> ПДТ — придомовая территория по дворам (сегодня)</h3>
+    <div class="cbody" id="b-pdt">
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Адрес (двор)</th><th>Выполнено</th><th>Пропущено</th><th>Выполнение</th></tr></thead>
+          <tbody id="pdt-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -448,11 +460,13 @@ function renderMopPdt(d){
   }
   html+='</div>';
 
-  // ── ПДТ ──
+  // ── ПДТ (двор из «Территории») ──
   const p=d.pdt;
-  const pdtNote = p.total===0
-    ? '<div style="font-size:12px;color:var(--text-3);margin-top:4px;">Задачи придомовой территории совпадают с МОП или не назначены на локации</div>'
-    : '';
+  const pdtNote = (p.hasYard===false)
+    ? '<div style="font-size:12px;color:var(--text-3);margin-top:4px;">Для этого адреса двор не заведён в «Территории»</div>'
+    : (p.total===0
+        ? '<div style="font-size:12px;color:var(--text-3);margin-top:4px;">Сегодня задач по двору нет</div>'
+        : '');
   html+='<div style="background:var(--surface-2);border-radius:10px;padding:12px;">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
       '<span style="font-size:13px;font-weight:500;">🧤 ПДТ (территория)</span>'+
@@ -511,7 +525,32 @@ function renderHouseTable(){
   tb.querySelectorAll('tr.clickable').forEach(tr=>tr.onclick=()=>selectHouse(tr.dataset.id));
 }
 
-function renderAll(){ renderKPI(); renderCharts(); renderMap(); renderShifts(); renderHouseTable(); }
+// ПДТ по дворам (придомовая территория) — данные из «Территории» ThroneBaron
+function renderPdtTable(){
+  const tb=document.getElementById('pdt-body');
+  if(!tb) return;
+  const list=houseToday.filter(h=>h.pdt && h.pdt.yardId!=null);
+  if(!list.length){
+    tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">Нет данных по дворам</td></tr>';
+    return;
+  }
+  // сначала дворы с задачами (от худшего % к лучшему), затем без задач
+  const sorted=list.slice().sort((a,b)=>{
+    const ae=a.pdt.total>0?0:1, be=b.pdt.total>0?0:1;
+    if(ae!==be) return ae-be;
+    return a.pdt.pct-b.pdt.pct;
+  });
+  tb.innerHTML=sorted.map(h=>{
+    const p=h.pdt;
+    if(p.total===0)
+      return '<tr><td style="font-weight:500;">'+h.label+'</td><td>0</td><td>0</td><td style="color:var(--text-3)">нет задач</td></tr>';
+    const col=p.pct>=90?'#97C459':(p.pct>=70?'#EF9F27':'#E24B4A');
+    return '<tr><td style="font-weight:500;">'+h.label+'</td><td>'+p.done+'</td><td>'+p.missed+'</td>'+
+      '<td><span class="traffic"><span class="tdot" style="background:'+col+'"></span>'+p.pct+'%</span></td></tr>';
+  }).join('');
+}
+
+function renderAll(){ renderKPI(); renderCharts(); renderMap(); renderShifts(); renderHouseTable(); renderPdtTable(); }
 
 document.getElementById('period-seg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b)return;
@@ -615,8 +654,11 @@ async function loadHouseBreakdown(){
         status: h.status,
         tasks: h.total,
         closed: h.done,
+        mop: h.mop,
+        pdt: h.pdt,
       }));
       renderHouseTable();
+      renderPdtTable();
       try{ renderMap(); }catch(e){ console.warn('renderMap:', e); }
       if(selectedHouse){
         selectHouse(selectedHouse);
@@ -627,6 +669,7 @@ async function loadHouseBreakdown(){
     } else if(tb) {
       houseToday=[];
       tb.innerHTML='<tr><td colspan="4" style="color:var(--text-3);text-align:center;padding:16px;">Нет задач по домам за '+today+'</td></tr>';
+      renderPdtTable();
     }
   }catch(e){
     console.warn('house_breakdown:', e);

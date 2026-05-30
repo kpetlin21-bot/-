@@ -127,6 +127,39 @@ function get_all_locations(): array {
     return $all;
 }
 
+// ============================================================
+//  Карта «дом -> локация двора (ПДТ)».
+//  ПДТ (придомовая территория) живёт не внутри дома, а в корне
+//  «Территория» как дочерние локации «Двор …». Сопоставляем их
+//  с домами по адресу из названия:
+//    «Двор 43/3» -> дом 43к3 ; «Двор Б10» -> дом 10 (Балканская).
+//  Возвращает [houseId => yardLocationId] и id корня «Территория».
+// ============================================================
+function get_yard_map(array $allLocs): array {
+    $terrId = null;
+    foreach ($allLocs as $l) {
+        if (($l['project_id'] ?? null) == TB_PROJECT
+            && ($l['parent_id'] ?? null) === null
+            && strpos($l['name'] ?? '', 'Территори') !== false) {
+            $terrId = $l['id']; break;
+        }
+    }
+    $map = ['_terr' => $terrId];
+    if ($terrId === null) return $map;
+    foreach ($allLocs as $l) {
+        if ((int)($l['parent_id'] ?? 0) !== (int)$terrId) continue;
+        $part = trim(preg_replace('/^\s*Двор\s*/u', '', $l['name'] ?? '')); // «43/3» или «Б10»
+        if ($part === '') continue;
+        if (strpos($part, 'Б') === 0) {                 // Балканская: «Б10» -> «10»
+            $hid = substr($part, strlen('Б'));
+        } else {                                        // «43/3» -> «43к3»
+            $hid = str_replace('/', 'к', $part);
+        }
+        if ($hid !== '') $map[$hid] = $l['id'];
+    }
+    return $map;
+}
+
 $action = $_GET['action'] ?? 'help';
 $tz_msk = new DateTimeZone('Europe/Moscow');
 $today  = (new DateTime('now', $tz_msk))->format('Y-m-d');
@@ -507,6 +540,8 @@ switch ($action) {
         }
 
         $allLocs  = get_all_locations();
+        $yardMap  = get_yard_map($allLocs);          // [houseId => yardLocationId, _terr => id]
+        $terrId   = $yardMap['_terr'] ?? null;
         $rootLocs = array_filter($allLocs, function($l) {
             return $l['project_id'] == TB_PROJECT && $l['parent_id'] === null;
         });
@@ -514,19 +549,42 @@ switch ($action) {
         $houses = [];
         foreach ($rootLocs as $loc) {
             $locId   = $loc['id'];
+            // Сам корень «Территория» не дом — его задачи раскладываются по дворам
+            if ($terrId !== null && (int)$locId === (int)$terrId) continue;
             $locName = $loc['name'];
             $parts   = explode(' ', trim($locName), 2);
             $houseId = count($parts) > 1 ? $parts[1] : $locName;
 
+            // МОП — всё внутри дома (подъезды/этажи)
             $done   = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$locId.'*','limit'=>250]);
             $missed = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$locId.'*','limit'=>250]);
-            $dc = count($done['data'] ?? []);
-            $mc = count($missed['data'] ?? []);
+            $mopDone = count($done['data'] ?? []);
+            $mopMiss = count($missed['data'] ?? []);
+
+            // ПДТ — двор этого дома из «Территории»
+            $pdtDone = 0; $pdtMiss = 0; $yardId = $yardMap[$houseId] ?? null;
+            if ($yardId !== null) {
+                $yd = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$yardId.'*','limit'=>250]);
+                $ym = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$yardId.'*','limit'=>250]);
+                $pdtDone = count($yd['data'] ?? []);
+                $pdtMiss = count($ym['data'] ?? []);
+            }
+
+            // Светофор дома = МОП + ПДТ вместе
+            $dc = $mopDone + $pdtDone;
+            $mc = $mopMiss + $pdtMiss;
             $total = $dc + $mc;
             $rate  = $total > 0 ? round($dc/$total*100) : 0;
             $status = $rate>=90 ? 'ok' : ($rate>=70 ? 'warn' : 'crit');
 
-            $houses[] = ['id'=>$houseId,'label'=>$locName,'locationId'=>$locId,'done'=>$dc,'missed'=>$mc,'total'=>$total,'pct'=>$rate,'status'=>$status];
+            $mopTot = $mopDone + $mopMiss;
+            $pdtTot = $pdtDone + $pdtMiss;
+            $houses[] = [
+                'id'=>$houseId,'label'=>$locName,'locationId'=>$locId,
+                'done'=>$dc,'missed'=>$mc,'total'=>$total,'pct'=>$rate,'status'=>$status,
+                'mop'=>['done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0],
+                'pdt'=>['done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,'yardId'=>$yardId],
+            ];
         }
 
         usort($houses, function($a,$b){ return $a['pct'] - $b['pct']; });
@@ -540,9 +598,9 @@ switch ($action) {
     //  ?action=house_detail&location_id=1&date=2026-05-29
     //
     //  Логика:
-    //    Дом (wildcard) = МОП + ПДТ + прочее
-    //    МОП = сумма задач по всем секциям (каждая с wildcard)
-    //    ПДТ = Дом − МОП  (то что не попало в секции)
+    //    МОП = сумма задач по всем секциям дома (каждая с wildcard)
+    //    ПДТ = задачи соответствующего «Двора» из корня «Территория»
+    //    Всего = МОП + ПДТ
     // ----------------------------------------------------------
     case 'house_detail':
         set_time_limit(120);
@@ -551,18 +609,19 @@ switch ($action) {
         $date = $_GET['date'] ?? $today;
 
         $allLocs  = get_all_locations();
+        $yardMap  = get_yard_map($allLocs);
+
+        // Имя дома -> houseId (как в house_breakdown) -> двор
+        $houseLoc = null;
+        foreach ($allLocs as $l) { if ((int)$l['id'] === $locId) { $houseLoc = $l; break; } }
+        $houseId  = '';
+        if ($houseLoc) { $p = explode(' ', trim($houseLoc['name']), 2); $houseId = count($p)>1 ? $p[1] : $houseLoc['name']; }
+        $yardId   = $yardMap[$houseId] ?? null;
 
         // Секции (прямые дети дома)
         $sections = array_values(array_filter($allLocs, function($l) use ($locId) {
             return (int)$l['parent_id'] === $locId;
         }));
-
-        // Всего по дому (wildcard = все вложенные локации)
-        $houseD    = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$locId.'*','limit'=>250]);
-        $houseM    = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$locId.'*','limit'=>250]);
-        $houseDone = count($houseD['data'] ?? []);
-        $houseMiss = count($houseM['data'] ?? []);
-        $houseTot  = $houseDone + $houseMiss;
 
         // МОП = задачи по каждой секции (с wildcard = включая этажи)
         $mopZones = []; $mopDone = 0; $mopMiss = 0;
@@ -577,17 +636,26 @@ switch ($action) {
         }
         $mopTot = $mopDone + $mopMiss;
 
-        // ПДТ = то что не вошло в секции (придомовая территория)
-        $pdtDone = max(0, $houseDone - $mopDone);
-        $pdtMiss = max(0, $houseMiss - $mopMiss);
+        // ПДТ = двор этого дома из «Территории»
+        $pdtDone = 0; $pdtMiss = 0;
+        if ($yardId !== null) {
+            $yd = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$yardId.'*','limit'=>250]);
+            $ym = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$yardId.'*','limit'=>250]);
+            $pdtDone = count($yd['data'] ?? []);
+            $pdtMiss = count($ym['data'] ?? []);
+        }
         $pdtTot  = $pdtDone + $pdtMiss;
+
+        $houseDone = $mopDone + $pdtDone;
+        $houseMiss = $mopMiss + $pdtMiss;
+        $houseTot  = $houseDone + $houseMiss;
 
         echo json_encode([
             'date'   => $date,
             'locId'  => $locId,
             'total'  => ['done'=>$houseDone,'missed'=>$houseMiss,'total'=>$houseTot],
             'mop'    => ['done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0,'zones'=>$mopZones],
-            'pdt'    => ['done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0],
+            'pdt'    => ['done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,'yardId'=>$yardId,'hasYard'=>$yardId!==null],
         ], JSON_UNESCAPED_UNICODE);
         break;
 
