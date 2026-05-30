@@ -716,6 +716,58 @@ function renderHouseDetailHeader(h, geo){
     '</div>'+periodNote;
 }
 
+/** МОП/ПДТ за неделю/месяц: агрегаты из house_breakdown, без списков задач */
+function renderMopPdtPeriodSummary(h){
+  function pill(pct,total){ const col=trafficColor(pct,total); return '<span style="color:'+col+';font-weight:500;">'+pct+'%</span>'; }
+  function bar(pct,total){ const col=trafficColor(pct,total); return '<div style="height:4px;background:var(--surface-2);border-radius:2px;margin:4px 0 8px;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px;"></div></div>'; }
+  const periodLbl=period==='7'?'за неделю':'за месяц';
+  let html='<div id="mop-pdt-area">';
+
+  const m=h.mop||{};
+  const mopDone=m.done||0;
+  const mopTot=m.total!=null?m.total:((m.done||0)+(m.missed||0));
+  const mopPct=m.pct!=null?m.pct:(mopTot>0?Math.round(mopDone/mopTot*100):0);
+  html+='<div class="detail-block">'+
+    '<div class="detail-ch">'+
+      '<span class="detail-ch-title"><span class="chev">▾</span> 🧹 МОП (подъезды)</span>'+
+      '<span>'+mopDone+'/'+mopTot+' · '+pill(mopPct,mopTot)+'</span>'+
+    '</div>'+
+    '<div class="detail-body">'+bar(mopPct,mopTot)+
+      (mopTot>0
+        ? '<div style="font-size:12px;color:var(--text-3);">Сумма по дням '+periodLbl+'</div>'
+        : '<div style="font-size:12px;color:var(--text-3);">Нет задач МОП '+periodLbl+'</div>')+
+    '</div></div>';
+
+  const p=h.pdt||{};
+  const hasYard=p.yardId!=null && p.yardId!=='';
+  if(!hasYard){
+    html+='<div class="detail-block">'+
+      '<div style="font-size:13px;font-weight:500;margin-bottom:4px;">🧤 ПДТ (территория)</div>'+
+      '<div style="font-size:12px;color:var(--text-3);">Для этого адреса двор не заведён в «Территории»</div>'+
+    '</div>';
+  } else {
+    const pdtDone=p.done||0;
+    const pdtTot=p.total!=null?p.total:((p.done||0)+(p.missed||0));
+    const pdtPct=p.pct!=null?p.pct:(pdtTot>0?Math.round(pdtDone/pdtTot*100):0);
+    html+='<div class="detail-block">'+
+      '<div class="detail-ch">'+
+        '<span class="detail-ch-title"><span class="chev">▾</span> 🧤 ПДТ (территория)</span>'+
+        '<span>'+pdtDone+'/'+pdtTot+' · '+pill(pdtPct,pdtTot)+'</span>'+
+      '</div>'+
+      '<div class="detail-body">'+bar(pdtPct,pdtTot)+
+        (pdtTot>0
+          ? '<div style="font-size:12px;color:var(--text-3);">Сумма по дням '+periodLbl+'</div>'
+          : '<div style="font-size:12px;color:var(--text-3);">Нет задач ПДТ '+periodLbl+'</div>')+
+      '</div></div>';
+  }
+
+  html+='</div>'+
+    '<div style="font-size:12px;color:var(--text-3);margin-top:12px;">'+
+      'Списки задач и секции — в режимах «Сегодня» и «Вчера».'+
+    '</div>';
+  return html;
+}
+
 function selectHouse(id){
   selectedHouse=id; renderMap();
   const h=houseToday.find(x=>x.id===id);
@@ -729,10 +781,7 @@ function selectHouse(id){
   }
 
   if(isPeriodRangeMode()){
-    det.innerHTML=renderHouseDetailHeader(h, geo)+
-      '<div style="font-size:12px;color:var(--text-3);margin-top:12px;">'+
-        'Поминутная детализация МОП/ПДТ доступна для периодов «Сегодня» и «Вчера».'+
-      '</div>';
+    det.innerHTML=renderHouseDetailHeader(h, geo)+renderMopPdtPeriodSummary(h);
     return;
   }
 
