@@ -968,7 +968,7 @@ switch ($action) {
         }
 
         set_time_limit(300);
-        $cacheFile = sys_get_temp_dir() . '/tb_tbd_' . TB_PROJECT . '_'
+        $cacheFile = sys_get_temp_dir() . '/tb_tbd2_' . TB_PROJECT . '_'
             . md5($date . '_' . $group) . '.json';
         if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
             header('X-Cache: HIT');
