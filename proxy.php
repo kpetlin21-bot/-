@@ -783,10 +783,31 @@ switch ($action) {
             echo json_encode(['error' => 'forbidden']);
             break;
         }
+        // scope=day (по умолчанию) — KPI, дома, task_breakdown; укладывается в лимит хостинга ~120 с
+        // scope=period — неделя/месяц; scope=history — 30 дней; scope=full — всё подряд (может таймаутиться)
+        $scopeRaw = $_GET['scope'] ?? 'day';
+        $scopes   = ($scopeRaw === 'full')
+            ? ['day', 'period', 'history']
+            : array_values(array_filter(array_map('trim', explode(',', $scopeRaw))));
+        if (!$scopes) {
+            $scopes = ['day'];
+        }
+
         set_time_limit(300);
         $tz       = new DateTimeZone('Europe/Moscow');
         $now      = new DateTime('now', $tz);
         $todayStr = $now->format('Y-m-d');
+
+        $report = [];
+        $histWarmed = 0;
+        $statusWarm = [];
+        $houseWarm = [];
+        $taskBdWarm = [];
+        $dashWarm = null;
+
+        if (!in_array('period', $scopes, true)) {
+            goto warmup_skip_period;
+        }
 
         // Текущая неделя (с понедельника) и текущий месяц
         $monday = (clone $now);
@@ -795,7 +816,6 @@ switch ($action) {
         $firstOfMonth = (clone $now)->modify('first day of this month')->format('Y-m-d');
         $monthRange   = $firstOfMonth . ',' . $todayStr;
 
-        $report = [];
         foreach (['week' => $weekRange, 'month' => $monthRange] as $label => $range) {
             $complete = true;
             $allTasks = tb_get_all('/reports/tasks', ['date' => $range, 'project' => TB_PROJECT], $complete);
@@ -819,8 +839,13 @@ switch ($action) {
             $report[$label] = ['range'=>$range,'total'=>$totalCnt,'done'=>$doneCnt,'complete'=>$complete,'cached'=>$cached];
         }
 
+        warmup_skip_period:
+
+        if (!in_array('history', $scopes, true)) {
+            goto warmup_skip_history;
+        }
+
         // Прогрев истории по дням (тот же per-day кеш, что и в action=history)
-        $histWarmed = 0;
         for ($i = 29; $i >= 0; $i--) {
             $d        = (clone $now)->modify("-{$i} day")->format('Y-m-d');
             $isToday  = ($d === $todayStr);
@@ -844,14 +869,18 @@ switch ($action) {
             }
         }
 
+        warmup_skip_history:
+
+        if (!in_array('day', $scopes, true)) {
+            goto warmup_done;
+        }
+
         // Прогрев кеша задач по статусам (ускоряет KPI → детализация)
-        $statusWarm = [];
         foreach (['available', 'pending', 'in_progress', 'missed', 'done'] as $st) {
             $statusWarm[$st] = count(get_project_tasks_by_status($todayStr, $st));
         }
 
         // Прогрев house_breakdown и task_breakdown (файловый кеш на диске)
-        $houseWarm = [];
         foreach (['today', 'yesterday'] as $dlabel) {
             $t0 = microtime(true);
             $hb  = warmup_proxy_endpoint('action=house_breakdown&date=' . $dlabel, 300);
@@ -862,7 +891,6 @@ switch ($action) {
             ];
         }
 
-        $taskBdWarm = [];
         foreach (['planned', 'in_progress', 'missed'] as $group) {
             $t0  = microtime(true);
             $tbd = warmup_proxy_endpoint('action=task_breakdown&status=' . $group . '&date=today', 300);
@@ -876,7 +904,9 @@ switch ($action) {
         // Дашборд за сегодня (KPI + смены)
         $dashWarm = warmup_proxy_endpoint('action=dashboard&date=today', 120);
 
+        warmup_done:
         echo json_encode([
+            'scope'               => $scopes,
             'warmed'              => $report,
             'history_days_warmed' => $histWarmed,
             'status_tasks_today'  => $statusWarm,
