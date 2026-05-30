@@ -84,6 +84,7 @@
     <h3 class="ch" data-target="b-rate"><span class="chev">▾</span> <span id="rate-title">Динамика выполнения задач</span></h3>
     <div class="cbody" id="b-rate">
       <div class="chart-wrap"><canvas id="chartRate" role="img" aria-label="График выполнения задач"></canvas></div>
+      <div id="rate-note" style="font-size:11px; color:var(--text-3); margin-top:8px; line-height:1.4;"></div>
     </div>
   </div>
 
@@ -240,6 +241,8 @@ function renderCharts(){
   if(chartRate)chartRate.destroy();
   if(!periodData) return;
   const rateTitle=document.getElementById('rate-title');
+  const rateNote=document.getElementById('rate-note');
+  if(rateNote) rateNote.textContent='';
 
   if(isDayMode()){
     // Почасовой график выполнения.
@@ -257,7 +260,10 @@ function renderCharts(){
     const labels = hours.map(x=>String(x).padStart(2,'0')+':00');
     const bars   = hourly.slice();
     // прочее = выполнено, но без времени этого дня (нет started_at или начато в другой день)
+    const otherIdx = noTime>0 ? bars.length : -1;
     if(noTime>0){ labels.push('прочее'); bars.push(noTime); }
+    // «прочее» красим серым, остальные столбики — синие
+    const barColors = bars.map((v,i)=> i===otherIdx ? '#9A958A' : '#378ADD');
 
     if(doneTotal>0){
       const denom=totalTasks||1;
@@ -266,14 +272,34 @@ function renderCharts(){
       rateTitle.textContent='Выполнение по часам ('+(period==='today'?'сегодня':'вчера')+')';
       chartRate=new Chart(document.getElementById('chartRate'),{
         data:{labels,datasets:[
-          {type:'bar',label:'Выполнено задач',data:bars,backgroundColor:'#378ADD',yAxisID:'y',order:2},
+          {type:'bar',label:'Выполнено задач',data:bars,backgroundColor:barColors,yAxisID:'y',order:2},
           {type:'line',label:'% выполнения (нарастающим итогом)',data:cumPct,borderColor:'#3B6D11',backgroundColor:'rgba(59,109,17,0.08)',tension:0.3,pointRadius:3,yAxisID:'y1',order:1,fill:true}
         ]},
         options:{responsive:true,maintainAspectRatio:false,
           scales:{y:{position:'left',beginAtZero:true,title:{display:true,text:'задач',font:{size:10}}},
                   y1:{position:'right',min:0,max:100,grid:{drawOnChartArea:false},ticks:{callback:v=>v+'%'},title:{display:true,text:'% итог',font:{size:10}}}},
-          plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:11}}}}}
+          plugins:{
+            legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:11}}},
+            tooltip:{callbacks:{
+              title:(items)=>{
+                const i=items[0].dataIndex;
+                if(i===otherIdx) return 'Прочее';
+                const hh=hours[i];
+                return String(hh).padStart(2,'0')+':00–'+String(hh+1).padStart(2,'0')+':59';
+              },
+              afterBody:(items)=>{
+                if(items[0].dataIndex===otherIdx)
+                  return 'Выполнено, но без времени этого дня:\nначато в другой день или без отметки времени.\nВ KPI «Выполнено» учтено.';
+                return '';
+              }
+            }}
+          }}
       });
+      if(rateNote && noTime>0){
+        rateNote.innerHTML='<b>«Прочее» ('+noTime+')</b> — выполненные задачи без времени этого дня: '+
+          'начаты в другой день (например, поздняя смена накануне) или без отметки времени выполнения. '+
+          'Поставить их в конкретный час нельзя, но в показатель «Выполнено» они входят — поэтому показаны отдельным серым столбцом.';
+      }
     } else {
       // За день ещё нет выполненных задач
       rateTitle.textContent='Выполнение по часам ('+(period==='today'?'сегодня':'вчера')+')';
