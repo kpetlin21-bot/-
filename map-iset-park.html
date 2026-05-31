@@ -90,7 +90,7 @@
 <script>
 const TB_PROJECT_ID = 7;
 const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
-const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.79,60.63,56.82,60.66);out body;>;out skel qt;';
+const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.799,60.637,56.808,60.648);out body;>;out skel qt;';
 
 const STYLES = {
   green:  { fillColor: '#EAF3DE', color: '#639922' },
@@ -101,7 +101,7 @@ const STYLES = {
 
 let map;
 let housesByNum = {};
-let houseLayers = [];
+let drawnLayers = [];
 
 function mskToday() {
   const msk = new Date(Date.now() + 3 * 3600 * 1000);
@@ -122,7 +122,8 @@ function extractTbNumber(label) {
 }
 
 function styleForHouse(h) {
-  if (!h) return { ...STYLES.gray, className: 'no-data' };
+  if (!h) return { ...STYLES.gray };
+  if (h.pct == null && (h.total == null || h.total === 0)) return { ...STYLES.gray };
   const pct = h.pct ?? 0;
   if (pct >= 100) return { ...STYLES.green };
   if (pct >= 80) return { ...STYLES.yellow };
@@ -203,10 +204,12 @@ function indexHouses(breakdown) {
 }
 
 function drawBuildings(polys) {
-  let matched = 0;
+  drawnLayers = [];
+  let drawn = 0;
   for (const p of polys) {
     const house = matchHouse(p.tags);
-    if (house) matched++;
+    if (!house) continue;
+    drawn++;
     const st = styleForHouse(house);
     const layer = L.polygon(p.latlngs, {
       fillColor: st.fillColor,
@@ -215,9 +218,9 @@ function drawBuildings(polys) {
       fillOpacity: 0.75
     }).addTo(map);
     bindPopup(layer, house, p.tags);
-    houseLayers.push(layer);
+    drawnLayers.push(layer);
   }
-  return matched;
+  return drawn;
 }
 
 async function loadHouseDetail(locationId, label) {
@@ -269,24 +272,26 @@ document.getElementById('detail-modal').onclick = (e) => {
 };
 
 async function init() {
-  map = L.map('map', { scrollWheelZoom: true }).setView([56.8029, 60.6414], 16);
+  map = L.map('map', { scrollWheelZoom: true }).setView([56.8029, 60.6414], 18);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
 
   try {
-    setStatus('⏳ Здания OSM…');
-    const [osm, breakdown] = await Promise.all([fetchOverpass(), fetchHouseBreakdown()]);
+    setStatus('⏳ Данные ThroneBaron…');
+    const breakdown = await fetchHouseBreakdown();
     indexHouses(breakdown);
+    setStatus('⏳ Здания OSM…');
+    const osm = await fetchOverpass();
     const polys = parseOverpass(osm);
-    setStatus('⏳ Отрисовка ' + polys.length + ' зданий…');
-    const matched = drawBuildings(polys);
+    setStatus('⏳ Отрисовка…');
+    const drawn = drawBuildings(polys);
     const tbCount = (breakdown.houses || []).length;
-    setStatus('Домов TB: ' + tbCount + ' · сопоставлено: ' + matched + ' · OSM: ' + polys.length);
-    if (houseLayers.length) {
-      const group = L.featureGroup(houseLayers);
-      map.fitBounds(group.getBounds().pad(0.05));
+    setStatus('Домов TB: ' + tbCount + ' · на карте: ' + drawn);
+    if (drawnLayers.length > 0) {
+      const group = L.featureGroup(drawnLayers);
+      map.fitBounds(group.getBounds().pad(0.15));
     }
   } catch (e) {
     setStatus('Ошибка: ' + e.message);
