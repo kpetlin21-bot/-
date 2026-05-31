@@ -307,6 +307,8 @@ function indexHouses(breakdown) {
 
 function drawBuildings(polys) {
   buildOsmIndex(polys);
+  const osmMap = osmByKey;
+  console.log('OSM keys:', Object.keys(osmMap).slice(0, 20));
   drawnLayers = [];
   let drawn = 0;
   for (const h of tbHouses) {
@@ -393,6 +395,7 @@ async function init() {
     setStatus('⏳ Данные ThroneBaron…');
     const breakdown = await fetchHouseBreakdown();
     indexHouses(breakdown);
+    console.log('TB houses:', tbHouses.map(h => h.label));
     setStatus('⏳ Здания OSM…');
     const osm = await fetchOverpass();
     const polys = parseOverpass(osm);
