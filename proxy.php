@@ -1289,17 +1289,23 @@ switch ($action) {
             . ($isRange ? md5($date) : $date) . '.json';
         $cacheTtl = $isRange ? 3900 : 900;
 
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtl) {
-            header('X-Cache: HIT');
-            echo file_get_contents($cacheFile);
+        if (!proxy_force_refresh()
+            && file_exists($cacheFile)
+            && (time() - filemtime($cacheFile)) < $cacheTtl) {
+            header('X-Cache: FILE-HIT');
+            $filePayload = file_get_contents($cacheFile);
+            if (!$isRange) {
+                proxy_save_db_cache($projectId, 'house_breakdown', $date, '', $filePayload);
+            }
+            echo $filePayload;
             break;
         }
 
         $allLocs  = get_all_locations();
         $yardMap  = get_yard_map($allLocs);          // [houseId => yardLocationId, _terr => id]
         $terrId   = $yardMap['_terr'] ?? null;
-        $rootLocs = array_filter($allLocs, function($l) {
-            return $l['project_id'] == tb_project() && $l['parent_id'] === null;
+        $rootLocs = array_filter($allLocs, function($l) use ($projectId) {
+            return $l['project_id'] == $projectId && $l['parent_id'] === null;
         });
 
         $houses = [];
