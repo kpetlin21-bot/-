@@ -137,8 +137,8 @@ function addHouseLabel(polygon, label) {
     icon: L.divIcon({
       className: '',
       html: '<div style="font-size:12px;font-weight:700;color:#1a1a2e;' +
-        'background:rgba(255,255,255,0.85);padding:2px 5px;' +
-        'border-radius:3px;white-space:nowrap">' + label + '</div>',
+        'background:transparent;white-space:nowrap;' +
+        'text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff">' + label + '</div>',
       iconAnchor: [22, 11]
     }),
     interactive: false
@@ -221,7 +221,20 @@ function popupHtml(house, tags) {
     '<br><button type="button" class="popup-btn" data-loc="' + house.locationId + '">Детализация</button>';
 }
 
-function bindPopup(layer, house, tags) {
+function bindHouseInteraction(layer, house, tags) {
+  if (isEmbed) {
+    layer.on('click', () => {
+      window.parent.postMessage({
+        type: 'houseClick',
+        locationId: house.locationId,
+        label: house.label,
+        pct: house.pct,
+        done: house.done,
+        total: house.total
+      }, '*');
+    });
+    return;
+  }
   const html = popupHtml(house, tags);
   layer.bindPopup(html);
   layer.on('popupopen', () => {
@@ -272,7 +285,7 @@ function drawBuildings(polys) {
       weight: 2,
       fillOpacity: 0.65
     }).addTo(map);
-    bindPopup(layer, house, p.tags);
+    bindHouseInteraction(layer, house, p.tags);
     drawnLayers.push(layer);
     const label = houseMapLabel(house, p.tags);
     drawnLayers.push(addHouseLabel(layer, label));

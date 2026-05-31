@@ -1246,6 +1246,23 @@ document.getElementById('house-detail').addEventListener('click',e=>{
   if(block) block.classList.toggle('collapsed');
 });
 
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'houseClick') {
+    const h = houseToday.find(x => x.locationId === e.data.locationId);
+    if (h) {
+      selectHouse(h.id);
+      return;
+    }
+    const titleEl = document.getElementById('house-detail-title');
+    const det = document.getElementById('house-detail');
+    if (titleEl) titleEl.textContent = 'Детализация — ' + (e.data.label || '');
+    if (det) {
+      det.innerHTML = '<div id="mop-pdt-area"><div style="color:var(--text-3);font-size:13px;">⏳ Загружаю МОП и ПДТ…</div></div>';
+    }
+    loadHouseDetail(e.data.locationId, e.data.label);
+  }
+});
+
 // Сначала рисуем пустой дашборд, затем грузим данные
 updateHousePeriodUI();
 renderAll();
