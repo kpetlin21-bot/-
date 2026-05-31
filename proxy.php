@@ -11,9 +11,40 @@ define('INTERNAL_SYNC_KEY', 'cleansyst2026');
 if (is_file(__DIR__ . '/cache_db.php')) {
     require_once __DIR__ . '/cache_db.php';
 }
+if (is_file(__DIR__ . '/projects_lib.php')) {
+    require_once __DIR__ . '/projects_lib.php';
+}
 
 function tb_project(): int {
-    return (int)($_GET['project'] ?? TB_DEFAULT_PROJECT);
+    static $resolved = null;
+    if ($resolved !== null) {
+        return $resolved;
+    }
+    $slug = trim((string)($_GET['slug'] ?? ''));
+    if ($slug !== '' && function_exists('projects_slug_to_id')) {
+        $id = projects_slug_to_id($slug);
+        if ($id !== null) {
+            $resolved = $id;
+            return $resolved;
+        }
+        $resolved = 0;
+        return 0;
+    }
+    $resolved = (int)($_GET['project'] ?? TB_DEFAULT_PROJECT);
+    return $resolved;
+}
+
+function tb_project_slug_error_response(): bool {
+    $slug = trim((string)($_GET['slug'] ?? ''));
+    if ($slug === '') {
+        return false;
+    }
+    if (!function_exists('projects_slug_to_id') || projects_slug_to_id($slug) !== null) {
+        return false;
+    }
+    http_response_code(400);
+    echo json_encode(['error' => 'Unknown slug: ' . $slug], JSON_UNESCAPED_UNICODE);
+    return true;
 }
 
 function proxy_force_refresh(): bool {
@@ -39,7 +70,8 @@ function proxy_emit_db_cache(array $row, string $status = 'DB-HIT'): void {
 
 function proxy_save_db_cache(int $projectId, string $action, ?string $cacheDate, string $period, string $payload): void {
     if (function_exists('api_cache_set')) {
-        api_cache_set($projectId, $action, $cacheDate, $period, $payload);
+        $slug = function_exists('projects_id_to_slug') ? projects_id_to_slug($projectId) : '';
+        api_cache_set($projectId, $action, $cacheDate, $period, $payload, $slug);
     }
 }
 
@@ -209,6 +241,9 @@ function get_yard_map(array $allLocs): array {
 }
 
 $action = $_GET['action'] ?? 'help';
+if (tb_project_slug_error_response()) {
+    exit;
+}
 $tz_msk = new DateTimeZone('Europe/Moscow');
 $today  = (new DateTime('now', $tz_msk))->format('Y-m-d');
 

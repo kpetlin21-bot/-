@@ -26,6 +26,9 @@ scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeou
   "$DIR/proxy.php" \
   "$DIR/cache_db.php" \
   "$DIR/sync.php" \
+  "$DIR/projects.php" \
+  "$DIR/projects_config.php" \
+  "$DIR/projects_lib.php" \
   "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
 
 scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \

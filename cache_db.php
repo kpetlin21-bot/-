@@ -81,16 +81,18 @@ function api_cache_set(
     string $action,
     ?string $cacheDate,
     ?string $period,
-    string $payload
+    string $payload,
+    string $slug = ''
 ): void {
     $pdo = api_cache_pdo();
     $period = api_cache_norm_period($period);
     $stmt = $pdo->prepare(
-        'INSERT INTO api_cache (project_id, action, cache_date, period, payload)
-         VALUES (?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE payload = VALUES(payload), cached_at = CURRENT_TIMESTAMP'
+        'INSERT INTO api_cache (project_id, action, cache_date, period, payload, slug)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE payload = VALUES(payload), slug = VALUES(slug),
+         cached_at = CURRENT_TIMESTAMP'
     );
-    $stmt->execute([$projectId, $action, $cacheDate, $period, $payload]);
+    $stmt->execute([$projectId, $action, $cacheDate, $period, $payload, $slug ?: null]);
 }
 
 function sync_log_write(string $entity, string $status, ?string $error = null): void {
