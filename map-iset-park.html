@@ -21,7 +21,8 @@
       border: 1px solid rgba(255,255,255,0.35);
     }
     .header-nav a:hover { background: rgba(255,255,255,0.32); }
-    #map { flex: 1; min-height: 0; }
+    .map-wrap { flex: 1; min-height: 0; position: relative; background: #EDEAE2; }
+    #map { width: 100%; height: 100%; background: #EDEAE2; }
     .status-bar {
       position: absolute; top: 60px; left: 12px; z-index: 1000;
       background: #fff; padding: 8px 12px; border-radius: 8px; font-size: 12px;
@@ -29,14 +30,12 @@
     }
     .legend {
       position: absolute; bottom: 24px; right: 12px; z-index: 1000;
-      background: #fff; padding: 10px 12px; border-radius: 8px; font-size: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.12); line-height: 1.6;
+      background: rgba(255,255,255,0.92); padding: 8px 12px; border-radius: 8px;
+      font-size: 11px; color: var(--text-2, #5F5E5A);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: flex; gap: 14px; flex-wrap: wrap;
     }
-    .legend-item { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-    .legend-swatch {
-      width: 18px; height: 12px; border-radius: 2px; border: 2px solid;
-      flex-shrink: 0;
-    }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; }
     .leaflet-popup-content { font-size: 13px; line-height: 1.45; min-width: 180px; }
     .popup-btn {
       display: inline-block; margin-top: 8px; padding: 6px 12px;
@@ -67,15 +66,13 @@
       <a href="/home.html">Все объекты</a>
     </nav>
   </header>
-  <div style="position:relative;flex:1;display:flex;min-height:0;">
+  <div class="map-wrap">
     <div id="status" class="status-bar">⏳ Загрузка карты…</div>
     <div id="map"></div>
     <div class="legend">
-      <strong>Светофор</strong>
-      <div class="legend-item"><span class="legend-swatch" style="background:#EAF3DE;border-color:#639922"></span> 100%</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#FAEEDA;border-color:#BA7517"></span> 80–99%</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#FCEBEB;border-color:#E24B4A"></span> &lt;80%</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#F1EFE8;border-color:#9ca3af"></span> нет данных</div>
+      <span style="color:#639922">● 100%</span>
+      <span style="color:#BA7517">● 80–99%</span>
+      <span style="color:#E24B4A">● ≤79%</span>
     </div>
   </div>
 
@@ -93,10 +90,10 @@ const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT
 const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.799,60.637,56.808,60.648);out body;>;out skel qt;';
 
 const STYLES = {
-  green:  { fillColor: '#EAF3DE', color: '#639922' },
-  yellow: { fillColor: '#FAEEDA', color: '#BA7517' },
-  red:    { fillColor: '#FCEBEB', color: '#E24B4A' },
-  gray:   { fillColor: '#F1EFE8', color: '#9ca3af' }
+  green:  { fillColor: '#C8E6A0', color: '#639922', weight: 1.5, fillOpacity: 0.85 },
+  yellow: { fillColor: '#FAEEDA', color: '#BA7517', weight: 1.5, fillOpacity: 0.85 },
+  red:    { fillColor: '#FCEBEB', color: '#E24B4A', weight: 1.5, fillOpacity: 0.85 },
+  gray:   { fillColor: '#D4D0C8', color: '#B8B4AC', weight: 1, fillOpacity: 0.8 }
 };
 
 let map;
@@ -119,6 +116,28 @@ function extractTbNumber(label) {
   if (m) return normHouseNum(m[1]);
   const tail = String(label).match(/(\d+[\d/a-zа-яё]*)/i);
   return tail ? normHouseNum(tail[1]) : normHouseNum(label);
+}
+
+function houseMapLabel(house, tags) {
+  const num = tags['addr:housenumber'];
+  if (num) return String(num);
+  const m = String(house.label || '').match(/хуторская\s+(.+)/i);
+  return m ? m[1] : (house.label || '—');
+}
+
+function addHouseLabel(polygon, label) {
+  const center = polygon.getBounds().getCenter();
+  const marker = L.marker(center, {
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="font-size:11px;font-weight:600;color:#3d3d3a;' +
+        'background:rgba(255,255,255,0.7);padding:1px 4px;' +
+        'border-radius:3px;white-space:nowrap">' + label + '</div>',
+      iconAnchor: [20, 10]
+    }),
+    interactive: false
+  }).addTo(map);
+  return marker;
 }
 
 function styleForHouse(h) {
@@ -214,11 +233,13 @@ function drawBuildings(polys) {
     const layer = L.polygon(p.latlngs, {
       fillColor: st.fillColor,
       color: st.color,
-      weight: 2,
-      fillOpacity: 0.75
+      weight: st.weight,
+      fillOpacity: st.fillOpacity
     }).addTo(map);
     bindPopup(layer, house, p.tags);
     drawnLayers.push(layer);
+    const label = houseMapLabel(house, p.tags);
+    drawnLayers.push(addHouseLabel(layer, label));
   }
   return drawn;
 }
@@ -273,9 +294,9 @@ document.getElementById('detail-modal').onclick = (e) => {
 
 async function init() {
   map = L.map('map', { scrollWheelZoom: true }).setView([56.8029, 60.6414], 18);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+    attribution: '© Stadia Maps © OpenStreetMap',
+    maxZoom: 20
   }).addTo(map);
 
   try {
@@ -286,9 +307,8 @@ async function init() {
     const osm = await fetchOverpass();
     const polys = parseOverpass(osm);
     setStatus('⏳ Отрисовка…');
-    const drawn = drawBuildings(polys);
-    const tbCount = (breakdown.houses || []).length;
-    setStatus('Домов TB: ' + tbCount + ' · на карте: ' + drawn);
+    drawBuildings(polys);
+    document.getElementById('status').style.display = 'none';
     if (drawnLayers.length > 0) {
       const group = L.featureGroup(drawnLayers);
       map.fitBounds(group.getBounds().pad(0.15));
