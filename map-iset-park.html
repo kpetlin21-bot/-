@@ -88,12 +88,13 @@
 const TB_PROJECT_ID = 7;
 const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
 const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.799,60.637,56.808,60.648);out body;>;out skel qt;';
+const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](56.799,60.637,56.808,60.648);out body;>;out skel qt;';
 
 const STYLES = {
-  green:  { fillColor: '#C8E6A0', color: '#639922', weight: 1.5, fillOpacity: 0.85 },
-  yellow: { fillColor: '#FAEEDA', color: '#BA7517', weight: 1.5, fillOpacity: 0.85 },
-  red:    { fillColor: '#FCEBEB', color: '#E24B4A', weight: 1.5, fillOpacity: 0.85 },
-  gray:   { fillColor: '#D4D0C8', color: '#B8B4AC', weight: 1, fillOpacity: 0.8 }
+  green:  { fillColor: '#C8E6A0', color: '#639922', weight: 2, fillOpacity: 0.65 },
+  yellow: { fillColor: '#FAEEDA', color: '#BA7517', weight: 2, fillOpacity: 0.65 },
+  red:    { fillColor: '#FCEBEB', color: '#E24B4A', weight: 2, fillOpacity: 0.65 },
+  gray:   { fillColor: '#D4D0C8', color: '#B8B4AC', weight: 2, fillOpacity: 0.65 }
 };
 
 let map;
@@ -130,10 +131,10 @@ function addHouseLabel(polygon, label) {
   const marker = L.marker(center, {
     icon: L.divIcon({
       className: '',
-      html: '<div style="font-size:11px;font-weight:600;color:#3d3d3a;' +
-        'background:rgba(255,255,255,0.7);padding:1px 4px;' +
+      html: '<div style="font-size:12px;font-weight:700;color:#1a1a2e;' +
+        'background:rgba(255,255,255,0.85);padding:2px 5px;' +
         'border-radius:3px;white-space:nowrap">' + label + '</div>',
-      iconAnchor: [20, 10]
+      iconAnchor: [22, 11]
     }),
     interactive: false
   }).addTo(map);
@@ -169,6 +170,32 @@ function parseOverpass(data) {
   return polys;
 }
 
+function parseOverpassHighways(data) {
+  const nodes = new Map();
+  const ways = [];
+  for (const el of data.elements || []) {
+    if (el.type === 'node' && el.lat != null) nodes.set(el.id, [el.lat, el.lon]);
+    if (el.type === 'way' && el.tags && el.tags.highway) ways.push(el);
+  }
+  const lines = [];
+  for (const w of ways) {
+    const coords = (w.nodes || []).map(id => nodes.get(id)).filter(Boolean);
+    if (coords.length >= 2) lines.push(coords);
+  }
+  return lines;
+}
+
+function drawHighways(lines) {
+  for (const coords of lines) {
+    L.polyline(coords, {
+      color: '#B8B4AC',
+      weight: 1.5,
+      opacity: 0.6,
+      dashArray: '4 3'
+    }).addTo(map);
+  }
+}
+
 function matchHouse(tags) {
   const num = normHouseNum(tags['addr:housenumber']);
   if (!num) return null;
@@ -198,11 +225,15 @@ function bindPopup(layer, house, tags) {
   });
 }
 
-async function fetchOverpass() {
-  const url = '/api/overpass.php?data=' + encodeURIComponent(OVERPASS_QUERY);
+async function fetchOverpassQuery(query) {
+  const url = '/api/overpass.php?data=' + encodeURIComponent(query);
   const r = await fetch(url);
   if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
   return r.json();
+}
+
+async function fetchOverpass() {
+  return fetchOverpassQuery(OVERPASS_QUERY);
 }
 
 async function fetchHouseBreakdown() {
@@ -233,8 +264,8 @@ function drawBuildings(polys) {
     const layer = L.polygon(p.latlngs, {
       fillColor: st.fillColor,
       color: st.color,
-      weight: st.weight,
-      fillOpacity: st.fillOpacity
+      weight: 2,
+      fillOpacity: 0.65
     }).addTo(map);
     bindPopup(layer, house, p.tags);
     drawnLayers.push(layer);
@@ -293,8 +324,8 @@ document.getElementById('detail-modal').onclick = (e) => {
 };
 
 async function init() {
-  map = L.map('map', { scrollWheelZoom: true }).setView([56.8029, 60.6414], 18);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  map = L.map('map', { scrollWheelZoom: true, minZoom: 15, maxZoom: 19 }).setView([56.8029, 60.6414], 17);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap © CARTO',
     subdomains: 'abcd',
     maxZoom: 20
@@ -307,6 +338,9 @@ async function init() {
     setStatus('⏳ Здания OSM…');
     const osm = await fetchOverpass();
     const polys = parseOverpass(osm);
+    setStatus('⏳ Дороги и тропинки…');
+    const hwData = await fetchOverpassQuery(OVERPASS_HIGHWAYS_QUERY);
+    drawHighways(parseOverpassHighways(hwData));
     setStatus('⏳ Отрисовка…');
     drawBuildings(polys);
     document.getElementById('status').style.display = 'none';
