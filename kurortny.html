@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Дашборд руководителя — ЖК Новое Колпино</title>
+<title>Дашборд руководителя — ЖК «Курортный»</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
 <style>
   :root{ --bg:#F5F4EF; --surface:#FFFFFF; --surface-2:#F1EFE8; --text:#2C2C2A; --text-2:#5F5E5A; --text-3:#888780;
@@ -108,7 +108,7 @@
 
   <div class="header">
     <div>
-      <h1 class="title">Дашборд руководителя — ЖК «Новое Колпино»</h1>
+      <h1 class="title">Дашборд руководителя — ЖК «Курортный»</h1>
       <div class="subtitle">Операционные показатели клининга · источник: ThroneBaron <span class="demo-badge">демо-данные</span></div>
     </div>
     <div class="toolbar">
@@ -119,6 +119,8 @@
         <button data-p="30">Месяц</button>
       </div>
       <span id="save-status" class="status"></span>
+      <a href="/home.html" style="font-size:12px;padding:6px 12px;border-radius:6px;border:0.5px solid var(--border-2);text-decoration:none;color:var(--text);font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;">← Все объекты</a>
+
     </div>
   </div>
 
@@ -243,7 +245,12 @@ let liveShifts=[];
 let period='today';
 let selectedHouse=null;
 const statusEl=document.getElementById('save-status');
-const PROXY='https://api.cleansyst.ru/proxy.php';
+const TB_PROJECT_ID=4;
+const TB_SLUG='kurortny';
+function PROXY(qs){
+  return 'https://api.cleansyst.ru/proxy.php?project='+TB_PROJECT_ID+'&'+(qs||'').replace(/^\?/,'');
+}
+
 
 // Данные по периодам — кеш в памяти
 let periodCache={}; // {key: {tasks:{...}}}
@@ -366,8 +373,8 @@ function prefetchTaskBreakdown(){
   ['planned','in_progress','missed'].forEach(statusGroup=>{
     const cacheKey=statusGroup+':'+dateParam;
     if(taskBreakdownCache[cacheKey]) return;
-    fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+
-      '&date='+encodeURIComponent(dateParam), 180000)
+    fetchWithTimeout(PROXY('action=task_breakdown&status='+encodeURIComponent(statusGroup)+
+      '&date='+encodeURIComponent(dateParam)), 180000)
       .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP')))
       .then(d=>{ if(d && !d.error) taskBreakdownCache[cacheKey]=d; })
       .catch(()=>{});
@@ -390,7 +397,7 @@ async function openTaskBreakdown(statusGroup){
   try{
     let d=taskBreakdownCache[cacheKey];
     if(!d){
-      const r=await fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+'&date='+encodeURIComponent(dateParam), 180000);
+      const r=await fetchWithTimeout(PROXY('action=task_breakdown&status='+encodeURIComponent(statusGroup)+'&date='+encodeURIComponent(dateParam)), 180000);
       if(!r.ok) throw new Error('HTTP '+r.status);
       d=await r.json();
       if(d.error) throw new Error(d.error);
@@ -467,8 +474,8 @@ async function loadHouseBreakdownZones(houseEl, statusGroup, dateParam){
   const placeholder=body.querySelector('.breakdown-zones-placeholder');
   if(placeholder) placeholder.textContent='⏳ Загрузка секций…';
   try{
-    const r=await fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+
-      '&date='+encodeURIComponent(dateParam)+'&house_location_id='+locId+'&expand=zones', 120000);
+    const r=await fetchWithTimeout(PROXY('action=task_breakdown&status='+encodeURIComponent(statusGroup)+
+      '&date='+encodeURIComponent(dateParam)+'&house_location_id='+locId+'&expand=zones'), 120000);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const data=await r.json();
     if(placeholder) placeholder.remove();
@@ -541,8 +548,8 @@ async function loadZoneTasks(el, locId, statusGroup, dateParam){
   el.dataset.loaded='1';
   el.innerHTML='<div style="color:var(--text-3);padding:6px;">Загрузка задач…</div>';
   try{
-    const r=await fetchWithTimeout(PROXY+'?action=task_breakdown&status='+encodeURIComponent(statusGroup)+
-      '&date='+encodeURIComponent(dateParam)+'&location_id='+locId+'&expand=tasks', 120000);
+    const r=await fetchWithTimeout(PROXY('action=task_breakdown&status='+encodeURIComponent(statusGroup)+
+      '&date='+encodeURIComponent(dateParam)+'&location_id='+locId+'&expand=tasks'), 120000);
     const d=await r.json();
     el.innerHTML=renderTaskTable(d.tasks||[]);
   }catch(e){
@@ -748,7 +755,7 @@ async function loadHouseDetail(locationId, houseLabel){
   const area=document.getElementById('mop-pdt-area');
   if(!area) return;
   try{
-    const r=await fetchWithTimeout(PROXY+'?action=house_detail&location_id='+locationId+'&date='+encodeURIComponent(dateParam), 120000);
+    const r=await fetchWithTimeout(PROXY('action=house_detail&location_id='+locationId+'&date='+encodeURIComponent(dateParam)), 120000);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     if(d.error){ area.innerHTML='<div style="color:var(--text-3);font-size:13px;">'+d.error+'</div>'; return; }
@@ -1015,7 +1022,7 @@ async function loadPeriod(p){
 
   try{
     const action = (p==='today'||p==='yesterday') ? 'dashboard' : 'period_tasks';
-    const r=await fetch(PROXY+'?action='+action+'&date='+dateParam);
+    const r=await fetch(PROXY('action='+action+'&date='+dateParam));
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
 
@@ -1096,7 +1103,7 @@ async function loadHouseBreakdown(){
       document.getElementById('house-detail').innerHTML=
         '<div style="color:var(--text-3);font-size:13px;">⏳ Загрузка статистики по домам…</div>';
     }
-    const r=await fetchWithTimeout(PROXY+'?action=house_breakdown&date='+encodeURIComponent(dateParam), timeoutMs);
+    const r=await fetchWithTimeout(PROXY('action=house_breakdown&date='+encodeURIComponent(dateParam)), timeoutMs);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     if(d.houses && d.houses.length){
@@ -1142,7 +1149,7 @@ async function loadHouseBreakdown(){
 // Загружаем историю по дням через прокси (proxy.php?action=history), параллельно с loadToday
 async function loadHistory(){
   try{
-    const r=await fetchWithTimeout(PROXY+'?action=history&days=30', 120000);
+    const r=await fetchWithTimeout(PROXY('action=history&days=30'), 120000);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     if(d.history && d.history.length){
@@ -1173,7 +1180,7 @@ async function loadDayTasks(){
   }
   body.innerHTML='<div style="color:var(--text-3);font-size:13px;padding:8px 0;">⏳ Загрузка…</div>';
   try{
-    const r=await fetch(PROXY+'?action=day_tasks&date='+encodeURIComponent(dateParam));
+    const r=await fetch(PROXY('action=day_tasks&date='+encodeURIComponent(dateParam)));
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     body.innerHTML=renderDayTasksHtml(d);

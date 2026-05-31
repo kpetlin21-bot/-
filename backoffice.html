@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Системы сервиса — Бэк-офис</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f4f8; color: #1e293b; min-height: 100vh; display: flex; flex-direction: column; }
+    .header { background: #29ABE2; color: #fff; padding: 0 20px; height: 56px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .logo { font-weight: 700; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .btn-nav { background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.35); padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 13px; }
+    .btn-nav:hover { background: rgba(255,255,255,0.32); }
+    .sync-badge { background: rgba(0,0,0,0.15); padding: 5px 10px; border-radius: 20px; font-size: 12px; }
+    .layout { display: flex; flex: 1; min-height: 0; }
+    .sidebar { width: 220px; background: #1a2332; color: #94a3b8; flex-shrink: 0; padding: 16px 0; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 20px; cursor: pointer; font-size: 14px; border-left: 3px solid transparent; }
+    .nav-item:hover { background: rgba(255,255,255,0.05); color: #e2e8f0; }
+    .nav-item.active { background: rgba(41,171,226,0.15); color: #fff; border-left-color: #29ABE2; }
+    .nav-item i { font-size: 18px; width: 22px; text-align: center; }
+    .content { flex: 1; padding: 20px 24px; overflow-y: auto; }
+    .section { display: none; }
+    .section.active { display: block; }
+    h2 { font-size: 20px; margin-bottom: 16px; color: #0f172a; }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi { background: #fff; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .kpi-label { font-size: 12px; color: #64748b; }
+    .kpi-val { font-size: 22px; font-weight: 700; color: #29ABE2; margin-top: 4px; }
+    .panel { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .panel h3 { font-size: 14px; margin-bottom: 12px; color: #475569; }
+    .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+    .bar-label { width: 100px; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 22px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; background: #29ABE2; border-radius: 4px; min-width: 2px; }
+    .bar-val { width: 80px; text-align: right; font-size: 12px; color: #64748b; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+    th { color: #64748b; font-weight: 600; font-size: 12px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: #29ABE2; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+    .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .toolbar input, .toolbar select { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
+    .btn { background: #29ABE2; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .btn:hover { filter: brightness(1.05); }
+    .btn-outline { background: #fff; color: #29ABE2; border: 1px solid #29ABE2; }
+    .status-ok { color: #22c55e; }
+    .status-err { color: #ef4444; }
+    .empty { color: #94a3b8; font-size: 13px; padding: 12px 0; }
+    .rate-bar { display: inline-block; height: 8px; background: #e2e8f0; border-radius: 4px; width: 80px; vertical-align: middle; margin-right: 6px; }
+    .rate-fill { height: 100%; border-radius: 4px; }
+    @media (max-width: 900px) {
+      .layout { flex-direction: column; }
+      .sidebar { width: 100%; display: flex; overflow-x: auto; padding: 8px; }
+      .nav-item { border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">СИСТЕМЫ СЕРВИСА</div>
+    <div class="header-right">
+      <a class="btn-nav" href="/backoffice.html">Бэк-офис</a>
+      <a class="btn-nav" href="/home.html">Главная</a>
+      <span class="sync-badge" id="syncBadge">Синхр. …</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar">
+      <div class="nav-item active" data-section="finance"><i class="ti ti-cash"></i> Финансы</div>
+      <div class="nav-item" data-section="hr"><i class="ti ti-users"></i> HR</div>
+      <div class="nav-item" data-section="staff"><i class="ti ti-id-badge"></i> Сотрудники</div>
+      <div class="nav-item" data-section="reports"><i class="ti ti-chart-bar"></i> Отчёты</div>
+      <div class="nav-item" data-section="settings"><i class="ti ti-settings"></i> Настройки</div>
+    </nav>
+
+    <main class="content">
+      <section id="sec-finance" class="section active">
+        <h2>Финансы</h2>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-label">Выручка</div><div class="kpi-val" id="finRevenue">—</div></div>
+          <div class="kpi"><div class="kpi-label">ФОТ</div><div class="kpi-val" id="finPayroll">—</div></div>
+          <div class="kpi"><div class="kpi-label">Расходы</div><div class="kpi-val" id="finExpenses">—</div></div>
+          <div class="kpi"><div class="kpi-label">Маржа</div><div class="kpi-val" id="finMargin">—</div></div>
+        </div>
+        <div class="panel">
+          <h3>Выручка по городам</h3>
+          <div id="finCityBars"></div>
+        </div>
+        <div class="panel">
+          <h3>Топ ЖК по выручке</h3>
+          <table>
+            <thead><tr><th>ЖК</th><th>Город</th><th>Выручка</th><th>Маржа</th></tr></thead>
+            <tbody id="finTopTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="sec-hr" class="section">
+        <h2>HR</h2>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-label">Всего сотрудников</div><div class="kpi-val" id="hrTotal">—</div></div>
+          <div class="kpi"><div class="kpi-label">Активных</div><div class="kpi-val" id="hrActive">—</div></div>
+          <div class="kpi"><div class="kpi-label">В отпуске</div><div class="kpi-val" id="hrVacation">—</div></div>
+          <div class="kpi"><div class="kpi-label">Уволено за месяц</div><div class="kpi-val" id="hrFired">—</div></div>
+        </div>
+        <div class="panel">
+          <h3>Распределение по городам</h3>
+          <div id="hrCityBars"></div>
+        </div>
+        <div class="panel">
+          <h3>Средний оклад по должностям</h3>
+          <div id="hrRoleBars"></div>
+        </div>
+      </section>
+
+      <section id="sec-staff" class="section">
+        <h2>Сотрудники</h2>
+        <div class="toolbar">
+          <input type="search" id="staffSearch" placeholder="Поиск по имени…">
+          <select id="staffCityFilter">
+            <option value="all">Все города</option>
+            <option value="spb">СПб</option>
+            <option value="ekb">Екб</option>
+            <option value="kzn">Казань</option>
+          </select>
+        </div>
+        <div class="panel" style="padding:0; overflow:auto;">
+          <table>
+            <thead>
+              <tr><th></th><th>Имя</th><th>Объект</th><th>Должность</th><th>График</th><th>Статус</th><th>Оклад</th></tr>
+            </thead>
+            <tbody id="staffTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="sec-reports" class="section">
+        <h2>Отчёты</h2>
+        <div class="panel">
+          <h3>Рейтинг объектов по выполнению (сегодня)</h3>
+          <table>
+            <thead><tr><th>#</th><th>Объект</th><th>Выполнение</th><th>Кэш</th></tr></thead>
+            <tbody id="rankTable"></tbody>
+          </table>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="btn btn-outline" onclick="alert('В разработке')">Выгрузка Excel</button>
+          <button type="button" class="btn btn-outline" onclick="alert('В разработке')">Выгрузка PDF</button>
+        </div>
+      </section>
+
+      <section id="sec-settings" class="section">
+        <h2>Настройки</h2>
+        <div class="panel">
+          <h3>Синхронизация</h3>
+          <button type="button" class="btn" id="btnSync">Запустить синхронизацию</button>
+          <p id="syncMsg" style="margin-top:10px;font-size:13px;color:#64748b;"></p>
+          <table style="margin-top:16px;">
+            <thead><tr><th>Время</th><th>Сущность</th><th>Статус</th></tr></thead>
+            <tbody id="syncLogTable"></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <h3>Активные объекты (12)</h3>
+          <table>
+            <thead><tr><th>ЖК</th><th>Город</th><th>Slug</th></tr></thead>
+            <tbody id="objectsTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+const CITY_LABELS = { spb: 'СПб', ekb: 'Екб', kzn: 'Казань', other: '—' };
+const OBJECTS = [
+  { name: 'ЖК Астрид', city: 'СПб', slug: 'astrid' },
+  { name: 'ЖК Новое Колпино', city: 'СПб', slug: 'novoe-kolpino' },
+  { name: 'ЖК Курортный', city: 'СПб', slug: 'kurortny' },
+  { name: 'ЖК Космонавтов 11', city: 'Екб', slug: 'kosmonavtov-11' },
+  { name: 'ЖК Исеть парк', city: 'Екб', slug: 'iset-park' },
+  { name: 'ЖК Утес', city: 'Екб', slug: 'utes' },
+  { name: 'ЖК Астон.Движение', city: 'Екб', slug: 'aston-dvizhenie' },
+  { name: 'ЖК Астон.Реформа', city: 'Екб', slug: 'aston-reforma' },
+  { name: 'ЖК Твоя Привилегия', city: 'Екб', slug: 'tvoya-privilegiya' },
+  { name: 'ЖК Дом «Милый дом»', city: 'Екб', slug: 'mily-dom' },
+  { name: 'ЖК River Park', city: 'Екб', slug: 'river-park' },
+  { name: 'ЖК Нокса парк', city: 'Казань', slug: 'noksa-park' }
+];
+
+let staffRows = [];
+
+function fmtMoney(n) {
+  if (n == null || isNaN(n)) return '—';
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(n) + ' ₽';
+}
+
+function initials(name) {
+  if (!name) return '?';
+  const p = name.trim().split(/\s+/);
+  return ((p[0] || '')[0] || '') + ((p[1] || '')[0] || '');
+}
+
+function renderBars(containerId, items, valueKey, labelKey) {
+  const el = document.getElementById(containerId);
+  if (!items.length) {
+    el.innerHTML = '<p class="empty">Нет данных</p>';
+    return;
+  }
+  const max = Math.max(...items.map(x => x[valueKey] || 0), 1);
+  el.innerHTML = items.map(x => {
+    const v = x[valueKey] || 0;
+    const pct = Math.round((v / max) * 100);
+    return '<div class="bar-row"><span class="bar-label">' + (x[labelKey] || x.city || '—') + '</span>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<span class="bar-val">' + (typeof v === 'number' && valueKey === 'revenue' ? fmtMoney(v) : v) + '</span></div>';
+  }).join('');
+}
+
+function fetchSyncBadge() {
+  fetch('/api/sync_status.php').then(r => r.json()).then(d => {
+    document.getElementById('syncBadge').textContent = 'Синхр. ' + (d.label || '—');
+  }).catch(() => {});
+}
+
+async function loadFinance() {
+  const r = await fetch('/api/finance.php');
+  const d = await r.json();
+  const t = d.totals || {};
+  document.getElementById('finRevenue').textContent = fmtMoney(t.revenue);
+  document.getElementById('finPayroll').textContent = fmtMoney(t.payroll);
+  document.getElementById('finExpenses').textContent = fmtMoney(t.expenses);
+  document.getElementById('finMargin').textContent = fmtMoney(t.margin);
+
+  const byCity = (d.by_city || []).map(x => ({
+    city: CITY_LABELS[x.city] || x.city,
+    revenue: x.revenue
+  }));
+  renderBars('finCityBars', byCity, 'revenue', 'city');
+
+  const tbody = document.getElementById('finTopTable');
+  const rows = d.rows || [];
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">Нет записей в finance_monthly за май 2026</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.slice(0, 12).map(r =>
+    '<tr><td>' + (r.property_name || '—') + '</td><td>' + (CITY_LABELS[r.city] || '—') + '</td><td>' +
+    fmtMoney(r.revenue) + '</td><td>' + fmtMoney(r.margin) + '</td></tr>'
+  ).join('');
+}
+
+function loadHrFromStaff(rows) {
+  const total = rows.length;
+  const active = rows.filter(r => (r.status || '').toLowerCase() === 'active').length;
+  const vacation = rows.filter(r => (r.status || '').toLowerCase().includes('отпуск')).length;
+  const fired = rows.filter(r => {
+    const s = (r.status || '').toLowerCase();
+    return s.includes('увол') || s === 'fired' || s === 'terminated';
+  }).length;
+
+  document.getElementById('hrTotal').textContent = total;
+  document.getElementById('hrActive').textContent = active;
+  document.getElementById('hrVacation').textContent = vacation;
+  document.getElementById('hrFired').textContent = fired;
+
+  const cityCount = {};
+  rows.forEach(r => {
+    const c = r.city || 'other';
+    cityCount[c] = (cityCount[c] || 0) + 1;
+  });
+  const cityItems = Object.keys(cityCount).map(k => ({
+    city: CITY_LABELS[k] || k,
+    count: cityCount[k]
+  }));
+  renderBars('hrCityBars', cityItems, 'count', 'city');
+
+  const roleSal = {};
+  const roleN = {};
+  rows.forEach(r => {
+    const role = r.role || '—';
+    if (r.salary != null) {
+      roleSal[role] = (roleSal[role] || 0) + r.salary;
+      roleN[role] = (roleN[role] || 0) + 1;
+    }
+  });
+  const roleItems = Object.keys(roleSal).map(role => ({
+    city: role,
+    revenue: Math.round(roleSal[role] / roleN[role])
+  }));
+  renderBars('hrRoleBars', roleItems, 'revenue', 'city');
+}
+
+async function loadStaff() {
+  const r = await fetch('/api/staff.php');
+  const d = await r.json();
+  staffRows = d.rows || [];
+  loadHrFromStaff(staffRows);
+  renderStaffTable();
+}
+
+function renderStaffTable() {
+  const q = (document.getElementById('staffSearch').value || '').toLowerCase();
+  const city = document.getElementById('staffCityFilter').value;
+  const filtered = staffRows.filter(r => {
+    if (city !== 'all' && r.city !== city) return false;
+    if (q && !(r.full_name || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const tbody = document.getElementById('staffTableBody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Нет сотрудников в базе</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(r =>
+    '<tr><td><span class="avatar">' + initials(r.full_name) + '</span></td>' +
+    '<td>' + (r.full_name || '—') + '</td>' +
+    '<td>' + (r.property_name || '—') + '</td>' +
+    '<td>' + (r.role || '—') + '</td>' +
+    '<td>' + (r.schedule || '—') + '</td>' +
+    '<td>' + (r.status || '—') + '</td>' +
+    '<td>' + (r.salary != null ? fmtMoney(r.salary) : '—') + '</td></tr>'
+  ).join('');
+}
+
+async function loadRanking() {
+  const r = await fetch('/api/ranking.php');
+  const d = await r.json();
+  const items = d.items || [];
+  const tbody = document.getElementById('rankTable');
+  tbody.innerHTML = items.map((it, i) => {
+    const rate = it.rate;
+    const color = rate == null ? '#94a3b8' : (rate > 80 ? '#22c55e' : rate >= 60 ? '#f59e0b' : '#ef4444');
+    const w = rate != null ? rate : 0;
+    return '<tr><td>' + (i + 1) + '</td><td>' + it.name + '</td><td>' +
+      '<span class="rate-bar"><span class="rate-fill" style="width:' + w + '%;background:' + color + '"></span></span>' +
+      (rate != null ? rate + '%' : '—') + '</td><td style="font-size:12px;color:#94a3b8">' +
+      (it.cached_at || '—') + '</td></tr>';
+  }).join('');
+}
+
+async function loadSyncLog() {
+  try {
+    const r = await fetch('/api/sync_log.php?limit=10');
+    const d = await r.json();
+    const rows = d.rows || [];
+    document.getElementById('syncLogTable').innerHTML = rows.map(x =>
+      '<tr><td>' + x.ran_at + '</td><td>' + x.entity + '</td><td class="' +
+      (x.status === 'ok' ? 'status-ok' : 'status-err') + '">' + x.status + '</td></tr>'
+    ).join('') || '<tr><td colspan="3" class="empty">Нет записей</td></tr>';
+  } catch (e) {
+    document.getElementById('syncLogTable').innerHTML = '<tr><td colspan="3" class="empty">—</td></tr>';
+  }
+}
+
+function loadObjectsTable() {
+  document.getElementById('objectsTable').innerHTML = OBJECTS.map(o =>
+    '<tr><td>' + o.name + '</td><td>' + o.city + '</td><td><a href="/?slug=' + o.slug + '">' + o.slug + '</a></td></tr>'
+  ).join('');
+}
+
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    const id = 'sec-' + el.dataset.section;
+    document.getElementById(id).classList.add('active');
+  });
+});
+
+document.getElementById('staffSearch').addEventListener('input', renderStaffTable);
+document.getElementById('staffCityFilter').addEventListener('change', renderStaffTable);
+
+document.getElementById('btnSync').addEventListener('click', async () => {
+  const msg = document.getElementById('syncMsg');
+  msg.textContent = 'Запуск…';
+  try {
+    const r = await fetch('/sync.php?mode=fast&secret=cleansyst2026');
+    const t = await r.text();
+    msg.textContent = 'Готово: ' + t.slice(0, 200);
+    fetchSyncBadge();
+    loadSyncLog();
+  } catch (e) {
+    msg.textContent = 'Ошибка: ' + e.message;
+  }
+});
+
+fetchSyncBadge();
+loadFinance();
+loadStaff();
+loadRanking();
+loadSyncLog();
+loadObjectsTable();
+</script>
+</body>
+</html>
