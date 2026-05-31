@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ЖК Новое Колпино — Карта объекта</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+    .header {
+      background: #29ABE2; color: #fff; padding: 0 16px; height: 52px;
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .header h1 { font-size: 15px; font-weight: 600; }
+    .header-nav { display: flex; gap: 8px; }
+    .header-nav a {
+      color: #fff; text-decoration: none; font-size: 12px; font-weight: 600;
+      padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.35);
+    }
+    .header-nav a:hover { background: rgba(255,255,255,0.32); }
+    .map-wrap { flex: 1; min-height: 0; position: relative; background: #EDEAE2; }
+    #map { width: 100%; height: 100%; background: #EDEAE2; }
+    .status-bar {
+      position: absolute; top: 60px; left: 12px; z-index: 1000;
+      background: #fff; padding: 8px 12px; border-radius: 8px; font-size: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12); max-width: 280px;
+    }
+    .legend {
+      position: absolute; bottom: 24px; right: 12px; z-index: 1000;
+      background: rgba(255,255,255,0.92); padding: 8px 12px; border-radius: 8px;
+      font-size: 11px; color: var(--text-2, #5F5E5A);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: flex; gap: 14px; flex-wrap: wrap;
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; }
+    .leaflet-popup-content { font-size: 13px; line-height: 1.45; min-width: 180px; }
+    .popup-btn {
+      display: inline-block; margin-top: 8px; padding: 6px 12px;
+      background: #29ABE2; color: #fff; border: none; border-radius: 6px;
+      cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      z-index: 2000; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 12px; max-width: 520px; width: 100%;
+      max-height: 80vh; overflow: auto; padding: 16px 18px;
+    }
+    .modal h2 { font-size: 16px; margin-bottom: 10px; }
+    .modal-close {
+      float: right; background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b;
+    }
+    .detail-muted { color: #64748b; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>ЖК Новое Колпино — Карта объекта</h1>
+    <nav class="header-nav">
+      <a href="/novoe-kolpino.html">← Дашборд</a>
+      <a href="/home.html">Все объекты</a>
+    </nav>
+  </header>
+  <div class="map-wrap">
+    <div id="status" class="status-bar">⏳ Загрузка карты…</div>
+    <div id="map"></div>
+    <div class="legend">
+      <span style="color:#639922">● 100%</span>
+      <span style="color:#BA7517">● 80–99%</span>
+      <span style="color:#E24B4A">● ≤79%</span>
+    </div>
+  </div>
+
+  <div id="detail-modal" class="modal-backdrop" role="dialog" aria-hidden="true">
+    <div class="modal">
+      <button type="button" class="modal-close" id="modal-close" aria-label="Закрыть">&times;</button>
+      <h2 id="modal-title">Детализация</h2>
+      <div id="modal-body" class="detail-muted">Загрузка…</div>
+    </div>
+  </div>
+
+<script>
+const isEmbed = new URLSearchParams(window.location.search).has('embed');
+if (isEmbed) {
+  document.querySelector('.header').style.display = 'none';
+}
+
+const TB_PROJECT_ID = 2;
+const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
+const OVERPASS_QUERY = '[out:json][timeout:25];way[building](59.768,30.595,59.782,30.612);out body;>;out skel qt;';
+const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](59.768,30.595,59.782,30.612);out body;>;out skel qt;';
+
+const STYLES = {
+  green:  { fillColor: '#C8E6A0', color: '#639922', weight: 2, fillOpacity: 0.65 },
+  yellow: { fillColor: '#FAEEDA', color: '#BA7517', weight: 2, fillOpacity: 0.65 },
+  red:    { fillColor: '#FCEBEB', color: '#E24B4A', weight: 2, fillOpacity: 0.65 },
+  gray:   { fillColor: '#D4D0C8', color: '#B8B4AC', weight: 2, fillOpacity: 0.65 }
+};
+
+let map;
+let housesByNum = {};
+let tbHouses = [];
+let osmByKey = {};
+let drawnLayers = [];
+
+function mskToday() {
+  const msk = new Date(Date.now() + 3 * 3600 * 1000);
+  return msk.toISOString().slice(0, 10);
+}
+
+function normalizeHouseNum(s) {
+  if (!s) return '';
+  return s.toString()
+    .toLowerCase()
+    .trim()
+    .replace(/к(\d)/g, '/$1')
+    .replace(/\s+/g, '')
+    .replace(/[«»""]/g, '');
+}
+
+function tbKeyFromLabel(label) {
+  return normalizeHouseNum(String(label || ''));
+}
+
+function buildOsmIndex(polys) {
+  osmByKey = {};
+  for (const p of polys) {
+    const osmKey = normalizeHouseNum(p.tags['addr:housenumber']);
+    if (!osmKey) continue;
+    if (!osmByKey[osmKey]) osmByKey[osmKey] = [];
+    osmByKey[osmKey].push(p);
+  }
+}
+
+function findOsmPolyForTbHouse(h, polys) {
+  const tbKey = tbKeyFromLabel(h.label);
+  if (osmByKey[tbKey] && osmByKey[tbKey].length) {
+    return osmByKey[tbKey][0];
+  }
+  const labelNorm = normalizeHouseNum(h.label);
+  for (const p of polys) {
+    const street = p.tags['addr:street'] || '';
+    const num = p.tags['addr:housenumber'] || '';
+    const fullOsm = normalizeHouseNum(street + ' ' + num);
+    if (labelNorm === fullOsm || tbKey === normalizeHouseNum(num)) {
+      return p;
+    }
+  }
+  return null;
+}
+
+function houseMapLabel(house, tags) {
+  const num = tags['addr:housenumber'];
+  if (num) return String(num);
+  return tbKeyFromLabel(house.label) || house.label || '—';
+}
+
+function addHouseLabel(polygon, label) {
+  const center = polygon.getBounds().getCenter();
+  const marker = L.marker(center, {
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="font-size:12px;font-weight:700;color:#1a1a2e;' +
+        'background:transparent;white-space:nowrap;' +
+        'text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff">' + label + '</div>',
+      iconAnchor: [22, 11]
+    }),
+    interactive: false
+  }).addTo(map);
+  return marker;
+}
+
+function styleForHouse(h) {
+  if (!h) return { ...STYLES.gray };
+  if (h.pct == null && (h.total == null || h.total === 0)) return { ...STYLES.gray };
+  const pct = h.pct ?? 0;
+  if (pct >= 100) return { ...STYLES.green };
+  if (pct >= 80) return { ...STYLES.yellow };
+  return { ...STYLES.red };
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+function parseOverpass(data) {
+  const nodes = new Map();
+  const ways = [];
+  for (const el of data.elements || []) {
+    if (el.type === 'node' && el.lat != null) nodes.set(el.id, [el.lat, el.lon]);
+    if (el.type === 'way' && el.tags && el.tags.building) ways.push(el);
+  }
+  const polys = [];
+  for (const w of ways) {
+    const latlngs = (w.nodes || []).map(id => nodes.get(id)).filter(Boolean);
+    if (latlngs.length < 3) continue;
+    polys.push({ wayId: w.id, latlngs, tags: w.tags });
+  }
+  return polys;
+}
+
+function parseOverpassHighways(data) {
+  const nodes = new Map();
+  const ways = [];
+  for (const el of data.elements || []) {
+    if (el.type === 'node' && el.lat != null) nodes.set(el.id, [el.lat, el.lon]);
+    if (el.type === 'way' && el.tags && el.tags.highway) ways.push(el);
+  }
+  const lines = [];
+  for (const w of ways) {
+    const coords = (w.nodes || []).map(id => nodes.get(id)).filter(Boolean);
+    if (coords.length >= 2) lines.push(coords);
+  }
+  return lines;
+}
+
+function drawHighways(lines) {
+  for (const coords of lines) {
+    L.polyline(coords, {
+      color: '#B8B4AC',
+      weight: 1.5,
+      opacity: 0.6,
+      dashArray: '4 3'
+    }).addTo(map);
+  }
+}
+
+function popupHtml(house, tags) {
+  const street = tags['addr:street'] || '—';
+  const num = tags['addr:housenumber'] || '—';
+  const title = house ? house.label : ('Дом ' + num + ', ' + street);
+  if (!house) {
+    return '<b>' + title + '</b><br><span style="color:#64748b">Нет данных ThroneBaron</span>';
+  }
+  const pct = house.pct ?? 0;
+  return '<b>' + title + '</b><br>' +
+    'Выполнение: <b>' + pct + '%</b><br>' +
+    'Задач: ' + (house.done ?? 0) + ' / ' + (house.total ?? 0) +
+    '<br><button type="button" class="popup-btn" data-loc="' + house.locationId + '">Детализация</button>';
+}
+
+function bindHouseInteraction(layer, house, tags) {
+  if (isEmbed) {
+    layer.on('click', () => {
+      window.parent.postMessage({
+        type: 'houseClick',
+        locationId: house.locationId,
+        label: house.label,
+        pct: house.pct,
+        done: house.done,
+        total: house.total
+      }, '*');
+    });
+    return;
+  }
+  const html = popupHtml(house, tags);
+  layer.bindPopup(html);
+  layer.on('popupopen', () => {
+    const btn = document.querySelector('.leaflet-popup .popup-btn');
+    if (btn) btn.onclick = () => loadHouseDetail(+btn.dataset.loc, house?.label || '');
+  });
+}
+
+async function fetchOverpassQuery(query) {
+  const url = '/api/overpass.php?data=' + encodeURIComponent(query);
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
+  return r.json();
+}
+
+async function fetchOverpass() {
+  return fetchOverpassQuery(OVERPASS_QUERY);
+}
+
+async function fetchHouseBreakdown() {
+  const date = mskToday();
+  const r = await fetch(PROXY('action=house_breakdown&date=' + encodeURIComponent(date)));
+  if (!r.ok) throw new Error('house_breakdown HTTP ' + r.status);
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
+function indexHouses(breakdown) {
+  housesByNum = {};
+  tbHouses = breakdown.houses || [];
+  for (const h of tbHouses) {
+    const key = tbKeyFromLabel(h.label);
+    if (key) housesByNum[key] = h;
+  }
+}
+
+function drawBuildings(polys) {
+  buildOsmIndex(polys);
+  drawnLayers = [];
+  let drawn = 0;
+  for (const h of tbHouses) {
+    const p = findOsmPolyForTbHouse(h, polys);
+    if (!p) continue;
+    drawn++;
+    const st = styleForHouse(h);
+    const layer = L.polygon(p.latlngs, {
+      fillColor: st.fillColor,
+      color: st.color,
+      weight: 2,
+      fillOpacity: 0.65
+    }).addTo(map);
+    bindHouseInteraction(layer, h, p.tags);
+    drawnLayers.push(layer);
+    const label = houseMapLabel(h, p.tags);
+    drawnLayers.push(addHouseLabel(layer, label));
+  }
+  return drawn;
+}
+
+async function loadHouseDetail(locationId, label) {
+  const modal = document.getElementById('detail-modal');
+  const body = document.getElementById('modal-body');
+  const title = document.getElementById('modal-title');
+  title.textContent = label || ('Дом #' + locationId);
+  body.textContent = '⏳ Загрузка детализации…';
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+
+  try {
+    const date = mskToday();
+    const r = await fetch(PROXY('action=house_detail&location_id=' + locationId + '&date=' + encodeURIComponent(date)));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+
+    const t = d.total || {};
+    let html = '<p><b>Итого:</b> ' + (t.done || 0) + ' / ' + (t.total || 0) + ' задач · <b>' + (t.pct ?? 0) + '%</b></p>';
+    if (d.mop && d.mop.zones && d.mop.zones.length) {
+      html += '<p style="margin-top:10px"><b>МОП</b></p><ul style="margin:4px 0 0 16px;font-size:13px">';
+      d.mop.zones.forEach(z => {
+        html += '<li>' + (z.name || '—') + ': ' + (z.done || 0) + '/' + (z.total || 0) + ' (' + (z.pct ?? 0) + '%)</li>';
+      });
+      html += '</ul>';
+    }
+    if (d.pdt) {
+      html += '<p style="margin-top:10px"><b>ПДТ</b>: ' + (d.pdt.done || 0) + '/' + (d.pdt.total || 0);
+      if (d.pdt.yardName) html += ' · ' + d.pdt.yardName;
+      html += '</p>';
+    }
+    body.innerHTML = html;
+  } catch (e) {
+    body.textContent = 'Ошибка: ' + e.message;
+  }
+}
+
+document.getElementById('modal-close').onclick = () => {
+  const modal = document.getElementById('detail-modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+};
+document.getElementById('detail-modal').onclick = (e) => {
+  if (e.target.id === 'detail-modal') {
+    e.currentTarget.classList.remove('open');
+    e.currentTarget.setAttribute('aria-hidden', 'true');
+  }
+};
+
+async function init() {
+  map = L.map('map', { scrollWheelZoom: true, minZoom: 16, maxZoom: 19 }).setView([59.7747, 30.6027], 17);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO',
+    subdomains: 'abcd',
+    maxZoom: 20
+  }).addTo(map);
+
+  if (isEmbed) {
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+    if (map.tap) map.tap.disable();
+  }
+
+  try {
+    setStatus('⏳ Данные ThroneBaron…');
+    const breakdown = await fetchHouseBreakdown();
+    indexHouses(breakdown);
+    setStatus('⏳ Здания OSM…');
+    const osm = await fetchOverpass();
+    const polys = parseOverpass(osm);
+    setStatus('⏳ Дороги и тропинки…');
+    const hwData = await fetchOverpassQuery(OVERPASS_HIGHWAYS_QUERY);
+    drawHighways(parseOverpassHighways(hwData));
+    setStatus('⏳ Отрисовка…');
+    drawBuildings(polys);
+    document.getElementById('status').style.display = 'none';
+    if (drawnLayers.length > 0) {
+      const group = L.featureGroup(drawnLayers);
+      map.fitBounds(group.getBounds().pad(0.05));
+    }
+  } catch (e) {
+    setStatus('Ошибка: ' + e.message);
+    console.error(e);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
