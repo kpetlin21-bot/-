@@ -15,8 +15,25 @@ require_once __DIR__ . '/cache_db.php';
 define('SYNC_SECRET', 'cleansyst2026');
 define('SYNC_BASE_URL', 'https://api.cleansyst.ru/proxy.php');
 
-/** Пока тест — один ЖК; далее все 14 */
-$projects = [2];
+/** Все ЖК ThroneBaron (ID 8 отсутствует в API) */
+$projects = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15];
+
+$PROJECT_NAMES = [
+    1  => 'ЖК Астрид',
+    2  => 'ЖК Новое Колпино',
+    3  => 'ЖК Живи в Рыбацком 1 очередь',
+    4  => 'ЖК Курортный',
+    5  => 'ЖК Живи в Рыбацком 2-3 очередь',
+    6  => 'ЖК Космонавтов 11',
+    7  => 'ЖК Исеть парк',
+    9  => 'ЖК Утес',
+    10 => 'ЖК Астон.Движение',
+    11 => 'ЖК Астон.Реформа',
+    12 => 'ЖК Нокса парк',
+    13 => 'ЖК Твоя Привилегия',
+    14 => 'ЖК Дом «Милый дом»',
+    15 => 'ЖК River Park',
+];
 
 $FAST_ENDPOINTS = [
     ['dashboard', 'date=today'],
@@ -105,7 +122,11 @@ $tStart    = microtime(true);
 echo "Sync mode={$mode} start " . date('Y-m-d H:i:s') . " MSK\n";
 echo "Endpoints: " . implode(', ', array_column($endpoints, 0)) . "\n";
 
+$summary = [];
+
 foreach ($projects as $projectId) {
+    $tProj   = microtime(true);
+    $errCnt  = 0;
     echo "\n=== project_id={$projectId} ===\n";
     foreach ($endpoints as [$action, $params]) {
         $entity = "p{$projectId}:{$action}:{$mode}";
@@ -127,9 +148,25 @@ foreach ($projects as $projectId) {
             $err = $res['error'] ?? 'unknown';
             sync_log_write($entity, 'error', $err);
             echo "  ERR {$action} ({$sec}s): {$err}\n";
+            $errCnt++;
         }
     }
+    $summary[] = [
+        'id'     => $projectId,
+        'name'   => $PROJECT_NAMES[$projectId] ?? ('project ' . $projectId),
+        'sec'    => round(microtime(true) - $tProj, 1),
+        'status' => $errCnt > 0 ? 'ERROR' : 'OK',
+    ];
 }
 
 $totalSec = round(microtime(true) - $tStart, 1);
 echo "\nSync mode={$mode} done " . date('Y-m-d H:i:s') . " (total {$totalSec}s)\n";
+
+echo "\n--- Summary ---\n";
+echo str_pad('project_id', 12) . str_pad('название', 36) . str_pad('время', 8) . "статус\n";
+foreach ($summary as $row) {
+    echo str_pad((string)$row['id'], 12)
+        . str_pad($row['name'], 36)
+        . str_pad($row['sec'] . 's', 8)
+        . $row['status'] . "\n";
+}
