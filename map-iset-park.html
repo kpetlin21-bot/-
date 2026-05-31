@@ -85,6 +85,11 @@
   </div>
 
 <script>
+const isEmbed = new URLSearchParams(window.location.search).has('embed');
+if (isEmbed) {
+  document.querySelector('.header').style.display = 'none';
+}
+
 const TB_PROJECT_ID = 7;
 const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
 const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.799,60.637,56.808,60.648);out body;>;out skel qt;';
@@ -324,12 +329,22 @@ document.getElementById('detail-modal').onclick = (e) => {
 };
 
 async function init() {
-  map = L.map('map', { scrollWheelZoom: true, minZoom: 15, maxZoom: 19 }).setView([56.8029, 60.6414], 17);
+  map = L.map('map', { scrollWheelZoom: true, minZoom: 16, maxZoom: 19 }).setView([56.8029, 60.6414], 17);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap © CARTO',
     subdomains: 'abcd',
     maxZoom: 20
   }).addTo(map);
+
+  if (isEmbed) {
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+    if (map.tap) map.tap.disable();
+  }
 
   try {
     setStatus('⏳ Данные ThroneBaron…');

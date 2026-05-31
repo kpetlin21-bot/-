@@ -155,7 +155,7 @@
       <h3 class="ch" data-target="b-map"><span class="chev">▾</span> Карта объекта — светофор по домам (кликабельно)</h3>
       <div class="cbody" id="b-map">
         <iframe
-          src="/map-iset-park.html"
+          src="/map-iset-park.html?embed=1"
           style="width:100%;height:500px;border:none;border-radius:8px"
           loading="lazy">
         </iframe>
@@ -665,8 +665,11 @@ function trafficLevel(pct,total){
 function statusColor(s){return s==='ok'?'#97C459':(s==='warn'?'#EF9F27':'#E24B4A');}
 function trafficColor(pct,total){return statusColor(trafficLevel(pct,total));}
 function renderMap(){
+  const hg=document.getElementById('map-houses');
+  if(!hg) return;
   const NS='http://www.w3.org/2000/svg';
-  const rg=document.getElementById('map-roads'); rg.innerHTML='';
+  const rg=document.getElementById('map-roads'); if(!rg) return;
+  rg.innerHTML='';
   ROADS_GEO.forEach(r=>{
     const pl=document.createElementNS(NS,'polyline');
     pl.setAttribute('points',r.pts); pl.setAttribute('fill','none'); pl.setAttribute('stroke-linecap','round');
@@ -674,7 +677,7 @@ function renderMap(){
     else{pl.setAttribute('stroke','#C2BBA8');pl.setAttribute('stroke-width','1.5');pl.setAttribute('stroke-dasharray','3 2.5');}
     pl.setAttribute('opacity','0.85'); rg.appendChild(pl);
   });
-  const hg=document.getElementById('map-houses'); hg.innerHTML='';
+  hg.innerHTML='';
   const byId={}; houseToday.forEach(h=>byId[h.id]=h);
   HOUSES_GEO.forEach(h=>{
     const st=byId[h.id];
