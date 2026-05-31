@@ -104,6 +104,8 @@ const STYLES = {
 
 let map;
 let housesByNum = {};
+let tbHouses = [];
+let osmByKey = {};
 let drawnLayers = [];
 
 function mskToday() {
@@ -111,17 +113,45 @@ function mskToday() {
   return msk.toISOString().slice(0, 10);
 }
 
-function normHouseNum(s) {
-  return String(s || '').trim().toLowerCase()
-    .replace(/к/g, '/')
-    .replace(/\s+/g, '');
+function normalizeHouseNum(s) {
+  if (!s) return '';
+  return s.toString()
+    .toLowerCase()
+    .trim()
+    .replace(/к(\d)/g, '/$1')
+    .replace(/\s+/g, '')
+    .replace(/[«»""]/g, '');
 }
 
-function extractTbNumber(label) {
-  const m = String(label).match(/хуторская\s+(.+)/i);
-  if (m) return normHouseNum(m[1]);
-  const tail = String(label).match(/(\d+[\d/a-zа-яё]*)/i);
-  return tail ? normHouseNum(tail[1]) : normHouseNum(label);
+function tbKeyFromLabel(label) {
+  return normalizeHouseNum(String(label || '').replace(/хуторская\s+/i, ''));
+}
+
+function buildOsmIndex(polys) {
+  osmByKey = {};
+  for (const p of polys) {
+    const osmKey = normalizeHouseNum(p.tags['addr:housenumber']);
+    if (!osmKey) continue;
+    if (!osmByKey[osmKey]) osmByKey[osmKey] = [];
+    osmByKey[osmKey].push(p);
+  }
+}
+
+function findOsmPolyForTbHouse(h, polys) {
+  const tbKey = tbKeyFromLabel(h.label);
+  if (osmByKey[tbKey] && osmByKey[tbKey].length) {
+    return osmByKey[tbKey][0];
+  }
+  const labelNorm = normalizeHouseNum(h.label);
+  for (const p of polys) {
+    const street = p.tags['addr:street'] || '';
+    const num = p.tags['addr:housenumber'] || '';
+    const fullOsm = normalizeHouseNum(street + ' ' + num);
+    if (labelNorm === fullOsm || tbKey === normalizeHouseNum(num)) {
+      return p;
+    }
+  }
+  return null;
 }
 
 function houseMapLabel(house, tags) {
@@ -201,12 +231,6 @@ function drawHighways(lines) {
   }
 }
 
-function matchHouse(tags) {
-  const num = normHouseNum(tags['addr:housenumber']);
-  if (!num) return null;
-  return housesByNum[num] || null;
-}
-
 function popupHtml(house, tags) {
   const street = tags['addr:street'] || '—';
   const num = tags['addr:housenumber'] || '—';
@@ -265,29 +289,33 @@ async function fetchHouseBreakdown() {
 
 function indexHouses(breakdown) {
   housesByNum = {};
-  for (const h of breakdown.houses || []) {
-    const key = extractTbNumber(h.label);
+  tbHouses = breakdown.houses || [];
+  for (const h of tbHouses) {
+    const key = tbKeyFromLabel(h.label);
     if (key) housesByNum[key] = h;
   }
 }
 
 function drawBuildings(polys) {
+  buildOsmIndex(polys);
   drawnLayers = [];
   let drawn = 0;
-  for (const p of polys) {
-    const house = matchHouse(p.tags);
-    if (!house) continue;
+  for (const h of tbHouses) {
+    const tbKey = tbKeyFromLabel(h.label);
+    const p = findOsmPolyForTbHouse(h, polys);
+    console.log('TB:', tbKey, '→ OSM match:', !!p);
+    if (!p) continue;
     drawn++;
-    const st = styleForHouse(house);
+    const st = styleForHouse(h);
     const layer = L.polygon(p.latlngs, {
       fillColor: st.fillColor,
       color: st.color,
       weight: 2,
       fillOpacity: 0.65
     }).addTo(map);
-    bindHouseInteraction(layer, house, p.tags);
+    bindHouseInteraction(layer, h, p.tags);
     drawnLayers.push(layer);
-    const label = houseMapLabel(house, p.tags);
+    const label = houseMapLabel(h, p.tags);
     drawnLayers.push(addHouseLabel(layer, label));
   }
   return drawn;
