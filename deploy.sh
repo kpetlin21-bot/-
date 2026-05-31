@@ -18,14 +18,30 @@ fi
 
 echo "=== Deploying to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH ==="
 
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
+  "mkdir -p ${REMOTE_PATH}data ${REMOTE_PATH}api"
+
 scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
   "$DIR/index.html" \
+  "$DIR/home.html" \
+  "$DIR/backoffice.html" \
   "$DIR/proxy.php" \
+  "$DIR/cache_db.php" \
+  "$DIR/sync.php" \
+  "$DIR/projects.php" \
+  "$DIR/projects_config.php" \
+  "$DIR/projects_lib.php" \
   "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
+
+scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+  "$DIR/api/"* \
+  "$REMOTE_USER@$REMOTE_HOST:${REMOTE_PATH}api/"
 
 echo ""
 echo "=== Deploy complete! ==="
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
-  "ls -lh ${REMOTE_PATH}index.html ${REMOTE_PATH}proxy.php"
-echo "Dashboard: https://api.cleansyst.ru/index.html"
-echo "Proxy:     https://api.cleansyst.ru/proxy.php?action=help"
+  "ls -lh ${REMOTE_PATH}home.html ${REMOTE_PATH}backoffice.html ${REMOTE_PATH}api/"
+echo "Dashboard:  https://api.cleansyst.ru/index.html"
+echo "Home:       https://api.cleansyst.ru/home.html"
+echo "Backoffice: https://api.cleansyst.ru/backoffice.html"
+echo "Proxy:      https://api.cleansyst.ru/proxy.php?action=help"
