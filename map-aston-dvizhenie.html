@@ -92,8 +92,8 @@ if (isEmbed) {
 
 const TB_PROJECT_ID = 10;
 const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
-const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.872,60.535,56.879,60.546);out body;>;out skel qt;';
-const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](56.872,60.535,56.879,60.546);out body;>;out skel qt;';
+const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.872,60.536,56.879,60.543);out body;>;out skel qt;';
+const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](56.872,60.536,56.879,60.543);out body;>;out skel qt;';
 
 const STYLES = {
   green:  { fillColor: '#C8E6A0', color: '#639922', weight: 2, fillOpacity: 0.65 },
@@ -367,7 +367,7 @@ document.getElementById('detail-modal').onclick = (e) => {
 };
 
 async function init() {
-  map = L.map('map', { scrollWheelZoom: true, minZoom: 16, maxZoom: 19 }).setView([56.8753, 60.5401], 17);
+  map = L.map('map', { scrollWheelZoom: true, minZoom: 16, maxZoom: 19 }).setView([56.8750, 60.5394], 17);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap © CARTO',
     subdomains: 'abcd',
