@@ -16,8 +16,8 @@ require_once __DIR__ . '/projects_lib.php';
 define('SYNC_SECRET', 'cleansyst2026');
 define('SYNC_BASE_URL', 'https://api.cleansyst.ru/proxy.php');
 
-/** Все ЖК ThroneBaron (ID 8 отсутствует в API) */
-$projects = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15];
+/** ЖК для cron-синхронизации (12 шт.). Не синхронизируем: 3, 5 (нет данных TB); 8 нет в API */
+$projects = [1, 2, 4, 6, 7, 9, 10, 11, 12, 13, 14, 15];
 
 $project_slugs = [
     1  => 'astrid',
