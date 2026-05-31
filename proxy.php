@@ -4,8 +4,53 @@
 // ============================================================
 
 define('TB_API_KEY',  'de4oWlnBgj8|IumZlKGCOaIrlAI36RFdcHi4BwDMsU2SpiX9pzXy0aadc85b');
-define('TB_PROJECT',  2);
+define('TB_DEFAULT_PROJECT', 2);
 define('TB_BASE_URL', 'https://api.thronebaron.com/v1');
+define('INTERNAL_SYNC_KEY', 'cleansyst2026');
+
+if (is_file(__DIR__ . '/cache_db.php')) {
+    require_once __DIR__ . '/cache_db.php';
+}
+
+function tb_project(): int {
+    return (int)($_GET['project'] ?? TB_DEFAULT_PROJECT);
+}
+
+function proxy_force_refresh(): bool {
+    return !empty($_GET['force_refresh'])
+        && (($_GET['internal_key'] ?? '') === INTERNAL_SYNC_KEY);
+}
+
+function proxy_try_db_cache(int $projectId, string $action, ?string $cacheDate, string $period = ''): ?array {
+    if (!function_exists('api_cache_get') || proxy_force_refresh()) {
+        return null;
+    }
+    return api_cache_get($projectId, $action, $cacheDate, $period, API_CACHE_TTL_SEC);
+}
+
+function proxy_emit_db_cache(array $row, string $status = 'DB-HIT'): void {
+    header('X-Cache: ' . $status);
+    header('X-Cached-At: ' . $row['cached_at']);
+    echo $row['payload'];
+}
+
+function proxy_save_db_cache(int $projectId, string $action, ?string $cacheDate, string $period, string $payload): void {
+    if (function_exists('api_cache_set')) {
+        api_cache_set($projectId, $action, $cacheDate, $period, $payload);
+    }
+}
+
+function proxy_serve_stale(int $projectId, string $action, ?string $cacheDate, string $period = ''): bool {
+    if (!function_exists('api_cache_get_stale')) {
+        return false;
+    }
+    $row = api_cache_get_stale($projectId, $action, $cacheDate, $period);
+    if ($row) {
+        proxy_emit_db_cache($row, 'STALE');
+        return true;
+    }
+    return false;
+}
 
 // CORS — разрешаем запросы с любого домена (Netlify, Платрум и др.)
 header('Access-Control-Allow-Origin: *');
@@ -138,7 +183,7 @@ function get_all_locations(): array {
 function get_yard_map(array $allLocs): array {
     $terrId = null;
     foreach ($allLocs as $l) {
-        if (($l['project_id'] ?? null) == TB_PROJECT
+        if (($l['project_id'] ?? null) == tb_project()
             && ($l['parent_id'] ?? null) === null
             && strpos($l['name'] ?? '', 'Территори') !== false) {
             $terrId = $l['id']; break;
@@ -242,7 +287,7 @@ function location_period_counts(string $dateRange, int $locId): array {
     $complete = true;
     $all      = tb_get_all('/reports/tasks', [
         'date'     => $dateRange,
-        'project'  => TB_PROJECT,
+        'project'  => tb_project(),
         'location' => $locId . '*',
     ], $complete);
     $done = 0;
@@ -311,7 +356,7 @@ function pdt_stats_for_yard_period(?int $yardId, string $dateRange): array {
 function count_location_tasks(string $date, int $locId, string $status): int {
     $r = tb_get('/reports/tasks', [
         'date'     => $date,
-        'project'  => TB_PROJECT,
+        'project'  => tb_project(),
         'status'   => $status,
         'location' => $locId . '*',
         'limit'    => 250,
@@ -392,7 +437,7 @@ function pdt_stats_for_yard(?int $yardId, string $date): array {
 function fetch_location_tasks_raw(string $date, int $locId): array {
     $r = tb_get('/reports/tasks', [
         'date'     => $date,
-        'project'  => TB_PROJECT,
+        'project'  => tb_project(),
         'location' => $locId . '*',
         'limit'    => 250,
     ]);
@@ -459,7 +504,7 @@ function task_breakdown_group_statuses(string $group): array {
 
 /** Все задачи проекта за день и статус (кеш 15 мин — для KPI breakdown) */
 function get_project_tasks_by_status(string $date, string $status): array {
-    $cacheFile = sys_get_temp_dir() . '/tb_st_' . TB_PROJECT . '_' . $date . '_' . $status . '.json';
+    $cacheFile = sys_get_temp_dir() . '/tb_st_' . tb_project() . '_' . $date . '_' . $status . '.json';
     if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
         $data = json_decode(file_get_contents($cacheFile), true);
         return is_array($data) ? $data : [];
@@ -467,7 +512,7 @@ function get_project_tasks_by_status(string $date, string $status): array {
     $complete = true;
     $all = tb_get_all('/reports/tasks', [
         'date'    => $date,
-        'project' => TB_PROJECT,
+        'project' => tb_project(),
         'status'  => $status,
     ], $complete);
     if ($complete && !empty($all)) {
@@ -487,7 +532,7 @@ function count_location_tasks_statuses(string $date, int $locId, array $statuses
     foreach ($statuses as $st) {
         $r = tb_get('/reports/tasks', [
             'date'     => $date,
-            'project'  => TB_PROJECT,
+            'project'  => tb_project(),
             'status'   => $st,
             'location' => $locId . '*',
             'limit'    => 250,
@@ -498,7 +543,7 @@ function count_location_tasks_statuses(string $date, int $locId, array $statuses
             $complete = true;
             $all = tb_get_all('/reports/tasks', [
                 'date'     => $date,
-                'project'  => TB_PROJECT,
+                'project'  => tb_project(),
                 'status'   => $st,
                 'location' => $locId . '*',
             ], $complete);
@@ -517,7 +562,7 @@ function location_task_list_statuses(int $locId, string $date, array $statuses):
         $complete = true;
         $all = tb_get_all('/reports/tasks', [
             'date'     => $date,
-            'project'  => TB_PROJECT,
+            'project'  => tb_project(),
             'status'   => $st,
             'location' => $locId . '*',
         ], $complete);
@@ -612,12 +657,24 @@ switch ($action) {
     //  ?action=shifts&date=2026-05-28
     // ----------------------------------------------------------
     case 'shifts':
-        $date = $_GET['date'] ?? $today;
+        $projectId = tb_project();
+        $rawDate   = $_GET['date'] ?? $today;
+        $date      = normalize_report_date($rawDate, $tz_msk, $today);
+        $hit       = proxy_try_db_cache($projectId, 'shifts', $date, '');
+        if ($hit) {
+            proxy_emit_db_cache($hit);
+            break;
+        }
         $data = tb_get('/work-shifts', [
             'filter[date]'    => $date,
-            'filter[project]' => TB_PROJECT,
+            'filter[project]' => $projectId,
         ]);
-        echo json_encode($data, JSON_UNESCAPED_UNICODE);
+        if (isset($data['error']) && proxy_serve_stale($projectId, 'shifts', $date, '')) {
+            break;
+        }
+        $payload = json_encode($data, JSON_UNESCAPED_UNICODE);
+        proxy_save_db_cache($projectId, 'shifts', $date, '', $payload);
+        echo $payload;
         break;
 
     // ----------------------------------------------------------
@@ -625,13 +682,24 @@ switch ($action) {
     //  ?action=tasks&date=today  или  ?action=tasks&date=2026-05-01,2026-05-28
     // ----------------------------------------------------------
     case 'tasks':
-        $date   = $_GET['date'] ?? 'today';
-        $done   = tb_get('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT, 'status' => 'done',   'limit' => 100]);
-        $missed = tb_get('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT, 'status' => 'missed', 'limit' => 100]);
+        $projectId = tb_project();
+        $rawDate   = $_GET['date'] ?? 'today';
+        $date      = normalize_report_date($rawDate, $tz_msk, $today);
+        $hit       = proxy_try_db_cache($projectId, 'tasks', $date, '');
+        if ($hit) {
+            proxy_emit_db_cache($hit);
+            break;
+        }
+        $done   = tb_get('/reports/tasks', ['date' => $date, 'project' => $projectId, 'status' => 'done',   'limit' => 100]);
+        $missed = tb_get('/reports/tasks', ['date' => $date, 'project' => $projectId, 'status' => 'missed', 'limit' => 100]);
+        if ((isset($done['error']) || isset($missed['error']))
+            && proxy_serve_stale($projectId, 'tasks', $date, '')) {
+            break;
+        }
         $doneCnt   = count($done['data']   ?? []);
         $missedCnt = count($missed['data'] ?? []);
         $total     = $doneCnt + $missedCnt;
-        echo json_encode([
+        $payload   = json_encode([
             'date'       => $date,
             'total'      => $total,
             'done'       => $doneCnt,
@@ -640,6 +708,8 @@ switch ($action) {
             'done_raw'   => $done['data']   ?? [],
             'missed_raw' => $missed['data'] ?? [],
         ], JSON_UNESCAPED_UNICODE);
+        proxy_save_db_cache($projectId, 'tasks', $date, '', $payload);
+        echo $payload;
         break;
 
     // ----------------------------------------------------------
@@ -648,7 +718,7 @@ switch ($action) {
     // ----------------------------------------------------------
     case 'schedule':
         $date = $_GET['date'] ?? $today;
-        $data = tb_get('/schedule/tasks', ['location' => TB_PROJECT]);
+        $data = tb_get('/schedule/tasks', ['location' => tb_project()]);
         echo json_encode($data, JSON_UNESCAPED_UNICODE);
         break;
 
@@ -674,7 +744,7 @@ switch ($action) {
         $date    = $_GET['date'] ?? $today;
         $nocache = isset($_GET['nocache']);
 
-        $cacheKey  = 'tb_pt_' . TB_PROJECT . '_' . md5($date) . '.json';
+        $cacheKey  = 'tb_pt_' . tb_project() . '_' . md5($date) . '.json';
         $cacheFile = sys_get_temp_dir() . '/' . $cacheKey;
 
         if ($nocache && file_exists($cacheFile)) { unlink($cacheFile); }
@@ -688,7 +758,7 @@ switch ($action) {
         }
 
         $complete = true;
-        $allTasks = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT], $complete);
+        $allTasks = tb_get_all('/reports/tasks', ['date' => $date, 'project' => tb_project()], $complete);
         $totalCnt = count($allTasks);
         $doneCnt = 0; $inProgressCnt = 0; $missedCnt = 0;
         $availableCnt = 0; $pendingCnt = 0;
@@ -738,7 +808,7 @@ switch ($action) {
         for ($i = $days - 1; $i >= 0; $i--) {
             $d = (clone $now)->modify("-{$i} day")->format('Y-m-d');
             $isToday   = ($d === $todayStr);
-            $dayCache  = sys_get_temp_dir() . '/tb_day_' . TB_PROJECT . '_' . $d . '.json';
+            $dayCache  = sys_get_temp_dir() . '/tb_day_' . tb_project() . '_' . $d . '.json';
             $ttl       = $isToday ? 900 : 86400;
 
             $rec = null;
@@ -747,7 +817,7 @@ switch ($action) {
             }
             if ($rec === null) {
                 $complete = true;
-                $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => TB_PROJECT], $complete);
+                $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => tb_project()], $complete);
                 $tot = count($tasks); $dn = 0; $ms = 0;
                 foreach ($tasks as $t) {
                     $st = $t['status'] ?? '';
@@ -818,7 +888,7 @@ switch ($action) {
 
         foreach (['week' => $weekRange, 'month' => $monthRange] as $label => $range) {
             $complete = true;
-            $allTasks = tb_get_all('/reports/tasks', ['date' => $range, 'project' => TB_PROJECT], $complete);
+            $allTasks = tb_get_all('/reports/tasks', ['date' => $range, 'project' => tb_project()], $complete);
             $totalCnt = count($allTasks);
             $doneCnt = 0; $inProgressCnt = 0; $missedCnt = 0;
             foreach ($allTasks as $t) {
@@ -833,7 +903,7 @@ switch ($action) {
                 'tasks' => ['total'=>$totalCnt,'done'=>$doneCnt,'in_progress'=>$inProgressCnt,'missed'=>$missedCnt,'rate'=>$rate],
             ], JSON_UNESCAPED_UNICODE);
             // Тот же путь кеша, что и в period_tasks
-            $ptCache = sys_get_temp_dir() . '/tb_pt_' . TB_PROJECT . '_' . md5($range) . '.json';
+            $ptCache = sys_get_temp_dir() . '/tb_pt_' . tb_project() . '_' . md5($range) . '.json';
             $cached = false;
             if ($complete && $totalCnt > 0) { file_put_contents($ptCache, $result); $cached = true; }
             $report[$label] = ['range'=>$range,'total'=>$totalCnt,'done'=>$doneCnt,'complete'=>$complete,'cached'=>$cached];
@@ -849,11 +919,11 @@ switch ($action) {
         for ($i = 29; $i >= 0; $i--) {
             $d        = (clone $now)->modify("-{$i} day")->format('Y-m-d');
             $isToday  = ($d === $todayStr);
-            $dayCache = sys_get_temp_dir() . '/tb_day_' . TB_PROJECT . '_' . $d . '.json';
+            $dayCache = sys_get_temp_dir() . '/tb_day_' . tb_project() . '_' . $d . '.json';
             $ttl      = $isToday ? 900 : 86400;
             if (file_exists($dayCache) && (time() - filemtime($dayCache)) < $ttl) continue;
             $complete = true;
-            $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => TB_PROJECT], $complete);
+            $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => tb_project()], $complete);
             $tot = count($tasks); $dn = 0; $ms = 0;
             foreach ($tasks as $t) {
                 $st = $t['status'] ?? '';
@@ -919,21 +989,33 @@ switch ($action) {
 
 
     case 'dashboard':
-        $tz   = new DateTimeZone('Europe/Moscow');
-        $now  = new DateTime('now', $tz);
+        $projectId = tb_project();
+        $tz        = new DateTimeZone('Europe/Moscow');
+        $now       = new DateTime('now', $tz);
+        $reqToday  = !isset($_GET['date']) || $_GET['date'] === 'today';
+        if ($reqToday) {
+            $hit = proxy_try_db_cache($projectId, 'dashboard', null, 'today');
+            if ($hit) {
+                proxy_emit_db_cache($hit);
+                break;
+            }
+        }
         $date = $_GET['date'] ?? $now->format('Y-m-d');
 
         // Все задачи за дату без фильтра статуса — даёт точный total
         $complete  = true;
-        $allTasks  = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT], $complete);
+        $allTasks  = tb_get_all('/reports/tasks', ['date' => $date, 'project' => $projectId], $complete);
 
         // Если сегодня ещё нет задач (утро) — берём вчера
         $isYesterday = false;
         if (empty($allTasks) && !isset($_GET['date'])) {
             $yesterday = (new DateTime('now', $tz))->modify('-1 day')->format('Y-m-d');
-            $allTasks  = tb_get_all('/reports/tasks', ['date' => $yesterday, 'project' => TB_PROJECT], $complete);
+            $allTasks  = tb_get_all('/reports/tasks', ['date' => $yesterday, 'project' => $projectId], $complete);
             $date      = $yesterday;
             $isYesterday = true;
+        }
+        if (!$complete && $reqToday && proxy_serve_stale($projectId, 'dashboard', null, 'today')) {
+            break;
         }
         header('X-Complete: ' . ($complete ? '1' : '0'));
 
@@ -982,7 +1064,7 @@ switch ($action) {
         }
 
         // Смены — за ту же дату что и задачи
-        $shifts     = tb_get('/work-shifts', ['filter[date]' => $date, 'filter[project]' => TB_PROJECT]);
+        $shifts     = tb_get('/work-shifts', ['filter[date]' => $date, 'filter[project]' => $projectId]);
         $shiftsData = $shifts['data'] ?? [];
         $staffTotal = count($shiftsData);
         $came = 0;
@@ -1010,7 +1092,7 @@ switch ($action) {
             ];
         }
 
-        echo json_encode([
+        $payload = json_encode([
             'date'        => $date,
             'isYesterday' => $isYesterday,
             'tasks'  => [
@@ -1029,6 +1111,10 @@ switch ($action) {
             'staff'  => ['total' => $staffTotal, 'came' => $came, 'absent' => $staffTotal - $came],
             'shifts' => $shiftsFormatted,
         ], JSON_UNESCAPED_UNICODE);
+        if ($reqToday) {
+            proxy_save_db_cache($projectId, 'dashboard', null, 'today', $payload);
+        }
+        echo $payload;
         break;
 
     // ----------------------------------------------------------
@@ -1074,7 +1160,7 @@ switch ($action) {
         }
 
         set_time_limit(300);
-        $cacheFile = sys_get_temp_dir() . '/tb_tbd2_' . TB_PROJECT . '_'
+        $cacheFile = sys_get_temp_dir() . '/tb_tbd2_' . tb_project() . '_'
             . md5($date . '_' . $group) . '.json';
         if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
             header('X-Cache: HIT');
@@ -1086,7 +1172,7 @@ switch ($action) {
         $yardMap  = get_yard_map($allLocs);
         $terrId   = $yardMap['_terr'] ?? null;
         $rootLocs = array_filter($allLocs, function ($l) {
-            return $l['project_id'] == TB_PROJECT && $l['parent_id'] === null;
+            return $l['project_id'] == tb_project() && $l['parent_id'] === null;
         });
 
         $houseSum = 0;
@@ -1181,13 +1267,22 @@ switch ($action) {
     //  ?action=house_breakdown&date=2026-05-29
     // ----------------------------------------------------------
     case 'house_breakdown':
-        $rawDate = $_GET['date'] ?? $today;
-        $isRange = (strpos($rawDate, ',') !== false);
-        $date    = $isRange ? $rawDate : normalize_report_date($rawDate, $tz_msk, $today);
+        $projectId = tb_project();
+        $rawDate   = $_GET['date'] ?? $today;
+        $isRange   = (strpos($rawDate, ',') !== false);
+        $date      = $isRange ? $rawDate : normalize_report_date($rawDate, $tz_msk, $today);
         set_time_limit($isRange ? 600 : 300);
 
+        if (!$isRange) {
+            $hit = proxy_try_db_cache($projectId, 'house_breakdown', $date, '');
+            if ($hit) {
+                proxy_emit_db_cache($hit);
+                break;
+            }
+        }
+
         $cacheFile = sys_get_temp_dir() . '/'
-            . ($isRange ? 'tb_hbp_w_' : 'tb_hb_w_') . TB_PROJECT . '_'
+            . ($isRange ? 'tb_hbp_w_' : 'tb_hb_w_') . tb_project() . '_'
             . ($isRange ? md5($date) : $date) . '.json';
         $cacheTtl = $isRange ? 3900 : 900;
 
@@ -1201,7 +1296,7 @@ switch ($action) {
         $yardMap  = get_yard_map($allLocs);          // [houseId => yardLocationId, _terr => id]
         $terrId   = $yardMap['_terr'] ?? null;
         $rootLocs = array_filter($allLocs, function($l) {
-            return $l['project_id'] == TB_PROJECT && $l['parent_id'] === null;
+            return $l['project_id'] == tb_project() && $l['parent_id'] === null;
         });
 
         $houses = [];
@@ -1257,6 +1352,9 @@ switch ($action) {
             'cached'      => false,
         ], JSON_UNESCAPED_UNICODE);
         file_put_contents($cacheFile, $result);
+        if (!$isRange) {
+            proxy_save_db_cache($projectId, 'house_breakdown', $date, '', $result);
+        }
         echo $result;
         break;
 
@@ -1345,7 +1443,7 @@ switch ($action) {
         ];
         $out = [];
         foreach ($formats as $name => $params) {
-            $params['project'] = TB_PROJECT;
+            $params['project'] = tb_project();
             $params['limit']   = 1;
             $r = tb_get('/reports/tasks', $params);
             $out[$name] = [
@@ -1363,7 +1461,7 @@ switch ($action) {
     //  ?action=teams
     // ----------------------------------------------------------
     case 'teams':
-        $data = tb_get('/teams', ['project' => TB_PROJECT]);
+        $data = tb_get('/teams', ['project' => tb_project()]);
         echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         break;
 
@@ -1376,12 +1474,12 @@ switch ($action) {
         $out  = [];
 
         // Смотрим структуру первой задачи (без фильтра)
-        $r = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'limit'=>3]);
+        $r = tb_get('/reports/tasks', ['date'=>$date,'project'=>tb_project(),'limit'=>3]);
         $out['sample_tasks'] = $r['data'] ?? [];
 
         // Пробуем разные статусы
         foreach (['done','missed','in_progress'] as $st) {
-            $r = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>$st,'limit'=>1]);
+            $r = tb_get('/reports/tasks', ['date'=>$date,'project'=>tb_project(),'status'=>$st,'limit'=>1]);
             $out['status_'.$st] = [
                 'data_count'    => count($r['data'] ?? []),
                 'has_next_page' => !empty($r['next_page_url']),
@@ -1389,7 +1487,7 @@ switch ($action) {
             ];
         }
         // Всего без фильтра (считаем все страницы)
-        $all = tb_get_all('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT]);
+        $all = tb_get_all('/reports/tasks', ['date'=>$date,'project'=>tb_project()]);
         $statusCounts = [];
         foreach ($all as $t) {
             $st = $t['status'] ?? $t['state'] ?? '(no_status_field)';
@@ -1422,7 +1520,7 @@ switch ($action) {
         $date = $_GET['date'] ?? $now->format('Y-m-d');
 
         // Получаем все команды проекта
-        $teamsData = tb_get('/teams', ['project' => TB_PROJECT]);
+        $teamsData = tb_get('/teams', ['project' => tb_project()]);
         $teams = $teamsData['data'] ?? [];
 
         // Для каждой команды получаем done/missed задачи по локации
