@@ -132,8 +132,7 @@ function normalizeStreet(s) {
 }
 
 function tbKeyFromLabel(label) {
-  const raw = String(label || '').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-  const parts = raw.split(/\s+/).filter(Boolean);
+  const parts = String(label || '').trim().split(/\s+/);
   if (parts.length >= 2) {
     const last = parts[parts.length - 1];
     const street = parts.slice(0, -1).join(' ');
@@ -142,7 +141,7 @@ function tbKeyFromLabel(label) {
     }
     return normalizeHouseNum(parts[0]) + '|' + normalizeStreet(parts.slice(1).join(' '));
   }
-  return normalizeHouseNum(raw);
+  return normalizeHouseNum(label);
 }
 
 function buildOsmIndex(polys) {
