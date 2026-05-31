@@ -72,6 +72,48 @@
 | 14 | mily-dom | ЖК Дом Милый дом | Екатеринбург |
 | 15 | river-park | ЖК River Park | Екатеринбург |
 
+## Карта объекта (Leaflet + OpenStreetMap)
+
+### Технология
+- Leaflet 1.9 + тайлы CartoDB Voyager
+- Контуры зданий из Overpass API (way[building])
+- Прокси: /api/overpass.php (User-Agent: cleansyst-dashboard/1.0)
+- Сопоставление TB ↔ OSM через normalizeHouseNum()
+  (конвертирует "1к3" → "1/3")
+
+### Цвета светофора
+- pct >= 100: #C8E6A0 / border #639922 (зелёный)
+- pct >= 80:  #FAEEDA / border #BA7517 (жёлтый)
+- pct < 80:   #FCEBEB / border #E24B4A (красный)
+- нет данных: #D4D0C8 / border #B8B4AC (серый)
+
+### Embed-режим (?embed=1)
+- Скрывает шапку страницы
+- Отключает перетаскивание и зум карты
+- Передаёт клик на дом через postMessage → loadHouseDetail()
+
+### Шаблон файла
+templates/map-template.html — основа для новых карт.
+Переменные для замены:
+- {{ZK_NAME}} — название ЖК
+- {{PROJECT_ID}} — project_id в ThroneBaron
+- {{BBOX}} — "(юг,запад,север,восток)"
+- {{CENTER}} — "[lat, lng]"
+- {{SLUG}} — slug для ссылок
+
+Git-тег: dashboard-template-v2
+
+### Чеклист для новой карты
+1. Скопировать templates/map-template.html → map-SLUG.html
+2. Заменить все {{переменные}}
+3. Проверить bbox через OpenStreetMap —
+   найти ЖК на карте и снять координаты границ
+4. Задеплоить на сервер
+5. Встроить в дашборд:
+   <iframe src="/map-SLUG.html?embed=1"
+     style="width:100%;height:500px;border:none;border-radius:8px"
+     loading="lazy">
+
 ## Что НЕ входит в этот шаблон
 - home.html — главная навигационная страница (карта РФ + города)
 - backoffice.html — бэк-офис (финансы, HR, отчёты)
