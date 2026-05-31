@@ -71,6 +71,25 @@ const SLUGS = [
   'noksa-park'
 ];
 
+const DASHBOARD_BY_SLUG = {
+  'astrid': '/astrid.html',
+  'novoe-kolpino': '/index.html',
+  'kurortny': '/kurortny.html',
+  'kosmonavtov-11': '/kosmonavtov-11.html',
+  'iset-park': '/iset-park.html',
+  'utes': '/utes.html',
+  'aston-dvizhenie': '/aston-dvizhenie.html',
+  'aston-reforma': '/aston-reforma.html',
+  'noksa-park': '/noksa-park.html',
+  'tvoya-privilegiya': '/tvoya-privilegiya.html',
+  'mily-dom': '/mily-dom.html',
+  'river-park': '/river-park.html'
+};
+
+function dashboardUrl(slug) {
+  return DASHBOARD_BY_SLUG[slug] || '/index.html';
+}
+
 const CITIES = {
   spb: {
     id: 'spb', name: 'Санкт-Петербург', center: [59.9386, 30.3141], zoom: 12,
@@ -183,7 +202,7 @@ function buildSidebar() {
       item.addEventListener('click', e => {
         e.stopPropagation();
         focusComplex(jk.slug);
-        window.open('/?slug=' + jk.slug, '_blank');
+        window.open(dashboardUrl(jk.slug), '_blank');
       });
       g.appendChild(item);
     });
@@ -238,7 +257,7 @@ function showRussia() {
 function balloonHtml(name, pct, slug) {
   const pctTxt = pct != null ? pct + '%' : '…';
   return '<div style="padding:4px 0;"><b>' + name + '</b><br>Выполнение: ' + pctTxt +
-    '<br><a href="/?slug=' + slug + '" target="_blank" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#29ABE2;color:#fff;text-decoration:none;border-radius:6px;font-size:13px;">Открыть дашборд</a></div>';
+    '<br><a href="' + dashboardUrl(slug) + '" target="_blank" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#29ABE2;color:#fff;text-decoration:none;border-radius:6px;font-size:13px;">Открыть дашборд</a></div>';
 }
 
 function showCity(cityId) {
