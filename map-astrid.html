@@ -123,41 +123,52 @@ function normalizeHouseNum(s) {
     .replace(/[«»""]/g, '');
 }
 
+function normalizeStreet(s) {
+  if (!s) return '';
+  return s.toLowerCase()
+    .replace(/проспект|улица|переулок|бульвар|пер\.|ул\.|пр\.|пр-кт/g, '')
+    .replace(/ё/g, 'е')
+    .trim();
+}
+
 function tbKeyFromLabel(label) {
-  return normalizeHouseNum(String(label || ''));
+  const raw = String(label || '').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1];
+    const street = parts.slice(0, -1).join(' ');
+    if (/^\d/.test(last)) {
+      return normalizeHouseNum(last) + '|' + normalizeStreet(street);
+    }
+    return normalizeHouseNum(parts[0]) + '|' + normalizeStreet(parts.slice(1).join(' '));
+  }
+  return normalizeHouseNum(raw);
 }
 
 function buildOsmIndex(polys) {
   osmByKey = {};
   for (const p of polys) {
-    const osmKey = normalizeHouseNum(p.tags['addr:housenumber']);
-    if (!osmKey) continue;
+    const housenumber = p.tags['addr:housenumber'];
+    const street = p.tags['addr:street'] || '';
+    if (!housenumber) continue;
+    const osmKey = normalizeHouseNum(housenumber) + '|' + normalizeStreet(street);
+    if (!osmKey || osmKey === '|') continue;
     if (!osmByKey[osmKey]) osmByKey[osmKey] = [];
     osmByKey[osmKey].push(p);
   }
 }
 
-function findOsmPolyForTbHouse(h, polys) {
-  const tbKey = tbKeyFromLabel(h.label);
-  if (osmByKey[tbKey] && osmByKey[tbKey].length) {
-    return osmByKey[tbKey][0];
-  }
-  const labelNorm = normalizeHouseNum(h.label);
-  for (const p of polys) {
-    const street = p.tags['addr:street'] || '';
-    const num = p.tags['addr:housenumber'] || '';
-    const fullOsm = normalizeHouseNum(street + ' ' + num);
-    if (labelNorm === fullOsm || tbKey === normalizeHouseNum(num)) {
-      return p;
-    }
-  }
+function findOsmPolyForTbHouse(h) {
+  const key = tbKeyFromLabel(h.label);
+  const match = osmByKey[key];
+  if (match && match.length) return match[0];
   return null;
 }
 
 function houseMapLabel(house, tags) {
   const num = tags['addr:housenumber'];
   if (num) return String(num);
-  return tbKeyFromLabel(house.label) || house.label || '—';
+  return house.label || '—';
 }
 
 function addHouseLabel(polygon, label) {
@@ -300,7 +311,8 @@ function drawBuildings(polys) {
   drawnLayers = [];
   let drawn = 0;
   for (const h of tbHouses) {
-    const p = findOsmPolyForTbHouse(h, polys);
+    console.log('TB label:', h.label, '→ key:', tbKeyFromLabel(h.label));
+    const p = findOsmPolyForTbHouse(h);
     if (!p) continue;
     drawn++;
     const st = styleForHouse(h);
