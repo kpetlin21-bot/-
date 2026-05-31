@@ -4,7 +4,7 @@
 // ============================================================
 
 define('TB_API_KEY',  'de4oWlnBgj8|IumZlKGCOaIrlAI36RFdcHi4BwDMsU2SpiX9pzXy0aadc85b');
-define('TB_PROJECT',  2);
+define('TB_PROJECT', (int)($_GET['project'] ?? 2));
 define('TB_BASE_URL', 'https://api.thronebaron.com/v1');
 
 // CORS — разрешаем запросы с любого домена (Netlify, Платрум и др.)
