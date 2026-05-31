@@ -375,13 +375,8 @@ async function init() {
   }).addTo(map);
 
   if (isEmbed) {
-    map.dragging.disable();
-    map.touchZoom.disable();
-    map.doubleClickZoom.disable();
     map.scrollWheelZoom.disable();
-    map.boxZoom.disable();
-    map.keyboard.disable();
-    if (map.tap) map.tap.disable();
+    map.doubleClickZoom.disable();
   }
 
   try {
