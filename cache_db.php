@@ -4,7 +4,12 @@
  */
 require_once __DIR__ . '/db.php';
 
-const API_CACHE_TTL_SEC = 300; // 5 минут
+const API_CACHE_TTL_SEC      = 300;  // 5 минут — dashboard, shifts, tasks
+const API_CACHE_TTL_SLOW_SEC = 3600; // 60 минут — house_breakdown
+
+function api_cache_ttl_for_action(string $action): int {
+    return $action === 'house_breakdown' ? API_CACHE_TTL_SLOW_SEC : API_CACHE_TTL_SEC;
+}
 
 function api_cache_pdo(): PDO {
     static $pdo = null;

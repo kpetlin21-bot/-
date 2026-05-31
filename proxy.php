@@ -25,7 +25,10 @@ function proxy_try_db_cache(int $projectId, string $action, ?string $cacheDate, 
     if (!function_exists('api_cache_get') || proxy_force_refresh()) {
         return null;
     }
-    return api_cache_get($projectId, $action, $cacheDate, $period, API_CACHE_TTL_SEC);
+    $ttl = function_exists('api_cache_ttl_for_action')
+        ? api_cache_ttl_for_action($action)
+        : API_CACHE_TTL_SEC;
+    return api_cache_get($projectId, $action, $cacheDate, $period, $ttl);
 }
 
 function proxy_emit_db_cache(array $row, string $status = 'DB-HIT'): void {
