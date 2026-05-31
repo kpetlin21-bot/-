@@ -92,8 +92,8 @@ if (isEmbed) {
 
 const TB_PROJECT_ID = 13;
 const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
-const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.759,60.528,56.773,60.544);out body;>;out skel qt;';
-const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](56.759,60.528,56.773,60.544);out body;>;out skel qt;';
+const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.761,60.528,56.771,60.544);out body;>;out skel qt;';
+const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](56.761,60.528,56.771,60.544);out body;>;out skel qt;';
 
 const STYLES = {
   green:  { fillColor: '#C8E6A0', color: '#639922', weight: 2, fillOpacity: 0.65 },
