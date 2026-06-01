@@ -86,14 +86,14 @@ textarea{min-height:72px;resize:vertical;}
 .offline-badge{font-size:11px;background:var(--ok-bg);color:var(--brand-dark);padding:3px 10px 3px 22px;border-radius:6px;margin-left:8px;display:none;position:relative;}
 .offline-badge::before{content:'';position:absolute;left:8px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--brand);}
 body.offline .offline-badge{display:inline}
-.draft-banner{display:none;background:var(--surface);border:.5px solid var(--brand);border-radius:12px;padding:12px 14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(41,171,226,.12)}
+.draft-banner{display:none;background:#E8F6FC;border:1px solid #29ABE2;border-radius:12px;padding:12px 14px;margin-bottom:12px}
 .draft-banner.show{display:block}
 .draft-banner p{margin:0 0 10px;font-size:13px;color:var(--text)}
 .draft-banner-actions{display:flex;gap:8px;flex-wrap:wrap}
 .draft-banner-actions button{flex:1;min-width:120px;padding:10px 14px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none}
 .draft-banner-actions .btn-continue{background:var(--brand);color:#fff}
-.draft-banner-actions .btn-reset{background:var(--surface);color:var(--brand-dark);border:.5px solid var(--brand)!important}
-.draft-indicator{position:fixed;left:0;right:0;bottom:calc(72px + env(safe-area-inset-bottom));text-align:center;font-size:12px;color:var(--text2);z-index:29;pointer-events:none;padding:0 14px}
+.draft-banner-actions .btn-reset{background:var(--gray-bg);color:var(--text2);border:.5px solid var(--border)!important}
+.page-footer #draft-indicator{color:var(--text2)}
 </style>
 </head>
 <body>
@@ -138,9 +138,8 @@ body.offline .offline-badge{display:inline}
 </div>
 </div>
 <div id="zones-root"></div>
-<p class="page-footer">© Системы Сервиса — cleansyst.ru</p>
+<p class="page-footer">© Системы Сервиса — cleansyst.ru · <span id="draft-indicator">Данные сохраняются автоматически</span></p>
 </div>
-<div class="draft-indicator" id="draft-indicator" style="display:none"></div>
 <div class="submit-bar"><button type="button" id="btn-submit">Отправить на сервер</button></div>
 <div class="toast" id="toast"></div>
 <div class="overlay" id="overlay-loading"><div class="spinner"></div><p>Отправка…</p></div>
@@ -191,18 +190,77 @@ function getUnionEntrances(){
   return [...s].sort((a,b)=>a-b);
 }
 
+async function compressImage(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1024;
+      let w = img.width, h = img.height;
+      if(w > h && w > MAX){ h = h * MAX / w; w = MAX; }
+      else if(h > MAX){ w = w * MAX / h; h = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Не удалось загрузить изображение'));
+    };
+    img.src = url;
+  });
+}
+
+function dataUrlToFile(dataUrl, name){
+  const parts = dataUrl.split(',');
+  const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin = atob(parts[1] || parts[0]);
+  const arr = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new File([arr], name || 'photo.jpg', { type: mime });
+}
+
+function photoToFile(photo, index){
+  if(photo instanceof File) return photo;
+  const dataUrl = photo.dataUrl || photo;
+  return dataUrlToFile(dataUrl, photo.name || ('photo_' + index + '.jpg'));
+}
+
+function appendPhotoThumb(num, photo, pr){
+  const thumb = document.createElement('div');
+  thumb.className = 'photo-thumb';
+  const img = document.createElement('img');
+  img.src = photo.dataUrl || photo;
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.textContent = '×';
+  del.onclick = () => {
+    const st = state.items[num];
+    const i = st.photos.indexOf(photo);
+    if(i >= 0) st.photos.splice(i, 1);
+    thumb.remove();
+    refreshItemRow(num, pr.closest('.item'));
+    saveDraft();
+  };
+  thumb.append(img, del);
+  pr.insertBefore(thumb, pr.firstChild);
+}
+
 function draftHasContent(d){
   if(!d) return false;
   return !!(d.jk?.projectId || d.manager || (d.houses && d.houses.length) ||
-    Object.keys(d.state || {}).length || Object.keys(d.itemComments || {}).length);
+    Object.keys(d.state || {}).length || Object.keys(d.itemComments || {}).length ||
+    Object.keys(d.photos || {}).length);
 }
 
-function buildDraft(){
+function buildDraft(includePhotos = true){
   const stateAnswers = {};
   const itemComments = {};
   const floorTags = {};
   const entranceTags = {};
-  let hadPhotos = false;
+  const photos = {};
   allItemNums.forEach(num => {
     const st = state.items[num];
     if(!st) return;
@@ -210,7 +268,9 @@ function buildDraft(){
     if(st.comment) itemComments[num] = st.comment;
     if(st.floors?.length) floorTags[num] = [...st.floors];
     if(st.entrances?.length) entranceTags[num] = [...st.entrances];
-    if(st.photos?.length) hadPhotos = true;
+    if(includePhotos && st.photos?.length){
+      photos[num] = st.photos.map(p => p.dataUrl || p);
+    }
   });
   const houses = Object.keys(state.selectedHouses).map(k => {
     const h = state.selectedHouses[k];
@@ -232,21 +292,40 @@ function buildDraft(){
     itemComments,
     floorTags,
     entranceTags,
+    photos,
     zoneComments: state.zoneComments || {},
-    hadPhotos,
     savedAt: Date.now(),
   };
 }
 
+function isQuotaError(e){
+  return e && (e.name === 'QuotaExceededError' || e.code === 22);
+}
+
+function persistDraft(draft){
+  localStorage.setItem(LS_DRAFT, JSON.stringify(draft));
+  updateDraftIndicator(draft.savedAt);
+}
+
 function saveDraft(){
   if(suppressDraft) return;
-  const draft = buildDraft();
+  let draft = buildDraft(true);
   if(!draftHasContent(draft)) return;
   try{
-    localStorage.setItem(LS_DRAFT, JSON.stringify(draft));
-    updateDraftIndicator(draft.savedAt);
+    persistDraft(draft);
   }catch(e){
-    console.warn('draft save failed', e);
+    if(!isQuotaError(e)){
+      console.warn('draft save failed', e);
+      return;
+    }
+    draft = buildDraft(false);
+    if(!draftHasContent(draft)) return;
+    try{
+      persistDraft(draft);
+      toast('Не удалось сохранить фото — слишком большой объём. Остальные данные сохранены.');
+    }catch(e2){
+      console.warn('draft save without photos failed', e2);
+    }
   }
 }
 
@@ -259,14 +338,13 @@ function updateDraftIndicator(ts){
   const el = document.getElementById('draft-indicator');
   if(!el) return;
   if(!ts){
-    el.style.display = 'none';
+    el.textContent = 'Данные сохраняются автоматически';
     return;
   }
   const d = new Date(ts);
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   el.textContent = '💾 Черновик сохранён ' + hh + ':' + mm;
-  el.style.display = 'block';
 }
 
 function loadDraftRaw(){
@@ -279,7 +357,12 @@ function loadDraftRaw(){
 
 function formatDraftWhen(ts){
   const d = new Date(ts);
-  return d.toLocaleString('ru-RU', { day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' });
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + mi;
 }
 
 function hideDraftBanner(){
@@ -290,7 +373,7 @@ function showDraftBanner(draft){
   const banner = document.getElementById('draft-banner');
   const text = document.getElementById('draft-banner-text');
   if(!banner || !text) return;
-  text.textContent = 'Найден незавершённый чек-лист от ' + formatDraftWhen(draft.savedAt) + '. Продолжить?';
+  text.textContent = '📋 Найден незавершённый чек-лист от ' + formatDraftWhen(draft.savedAt);
   banner.classList.add('show');
 }
 
@@ -316,6 +399,15 @@ function syncHouseRowUI(idx){
   });
 }
 
+function restorePhotoThumbs(num){
+  const row = document.querySelector('.item[data-item-num="' + num + '"]');
+  if(!row) return;
+  const pr = row.querySelector('.photo-row');
+  if(!pr) return;
+  pr.querySelectorAll('.photo-thumb').forEach(t => t.remove());
+  (state.items[num].photos || []).forEach(p => appendPhotoThumb(num, p, pr));
+}
+
 async function applyDraft(draft){
   suppressDraft = true;
   hideDraftBanner();
@@ -325,7 +417,10 @@ async function applyDraft(draft){
     st.comment = draft.itemComments?.[num] || '';
     st.floors = draft.floorTags?.[num] ? [...draft.floorTags[num]] : [];
     st.entrances = draft.entranceTags?.[num] ? [...draft.entranceTags[num]] : [];
-    st.photos = [];
+    st.photos = (draft.photos?.[num] || []).map((dataUrl, i) => ({
+      dataUrl,
+      name: 'photo_' + num.replace('.', '_') + '_' + i + '.jpg',
+    }));
   });
   state.zoneComments = draft.zoneComments || {};
   state.manager = draft.manager || '';
@@ -356,11 +451,9 @@ async function applyDraft(draft){
     const ta = row.querySelector('textarea');
     if(ta) ta.value = state.items[num].comment || '';
     refreshItemRow(num, row);
+    restorePhotoThumbs(num);
   });
   suppressDraft = false;
-  if(draft.hadPhotos){
-    toast('Фото в черновик не сохраняются — приложите их заново для пунктов с замечаниями');
-  }
   saveDraft();
 }
 
@@ -368,7 +461,7 @@ function setupDraftBanner(){
   const draft = loadDraftRaw();
   if(!draftHasContent(draft)) return;
   showDraftBanner(draft);
-  document.getElementById('draft-continue').onclick = () => applyDraft(draft);
+  document.getElementById('draft-continue').onclick = () => applyDraft(loadDraftRaw() || draft);
   document.getElementById('draft-discard').onclick = () => {
     clearDraft();
     hideDraftBanner();
@@ -565,30 +658,30 @@ function updateFailFloors(num, row){
 
 function setValue(num, val, row, zone){
   state.items[num].value=val;
-  if(val!=='fail'){ state.items[num].floors=[]; state.items[num].entrances=[]; }
+  if(val!=='fail'){
+    state.items[num].floors=[];
+    state.items[num].entrances=[];
+    state.items[num].photos=[];
+    const pr = row.querySelector('.photo-row');
+    if(pr) pr.querySelectorAll('.photo-thumb').forEach(t => t.remove());
+  }
   refreshItemRow(num, row);
 }
 
-function addPhoto(num, file, pr, warn){
+async function addPhoto(num, file, pr, warn){
   if(!file) return;
   const st=state.items[num];
   if(st.photos.length>=5){ toast('Максимум 5 фото'); return; }
-  st.photos.push(file);
-  const thumb=document.createElement('div');
-  thumb.className='photo-thumb';
-  const img=document.createElement('img');
-  img.src=URL.createObjectURL(file);
-  const del=document.createElement('button');
-  del.type='button'; del.textContent='×';
-  del.onclick=()=>{
-    const i=st.photos.indexOf(file);
-    if(i>=0) st.photos.splice(i,1);
-    thumb.remove();
+  try{
+    const dataUrl = await compressImage(file);
+    const entry = { dataUrl, name: file.name || 'photo.jpg' };
+    st.photos.push(entry);
+    appendPhotoThumb(num, entry, pr);
     refreshItemRow(num, pr.closest('.item'));
-  };
-  thumb.append(img,del);
-  pr.insertBefore(thumb, pr.firstChild);
-  refreshItemRow(num, pr.closest('.item'));
+    saveDraft();
+  }catch(e){
+    toast(e.message || 'Ошибка обработки фото');
+  }
 }
 
 function validate(){
@@ -638,7 +731,8 @@ async function submitChecklist(payload, photoMap){
   Object.entries(photoMap).forEach(([num, files]) => {
     files.forEach((f, i) => {
       const key='photo_'+num.replace(/\./g,'_')+(i?'_'+i:'');
-      fd.append(key, f, f.name||'photo.jpg');
+      const file = photoToFile(f, i);
+      fd.append(key, file, file.name || 'photo.jpg');
     });
   });
   const res=await fetch(API_SAVE, {method:'POST', body:fd});
@@ -701,7 +795,11 @@ document.getElementById('btn-submit').onclick=async ()=>{
   if(!navigator.onLine){
     const photoBlobs={};
     for(const [num, files] of Object.entries(photoMap)){
-      photoBlobs[num]=await Promise.all(files.map(fileToB64));
+      photoBlobs[num]=files.map((p, i) => {
+        const dataUrl = p.dataUrl || p;
+        const b64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        return { name: p.name || ('photo_' + i + '.jpg'), type: 'image/jpeg', data: b64 };
+      });
     }
     savePending(payload, photoBlobs);
     if('serviceWorker' in navigator && 'SyncManager' in window){
