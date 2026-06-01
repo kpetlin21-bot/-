@@ -8,7 +8,13 @@ REMOTE_USER="p837136"
 REMOTE_HOST="p837136.ftp.ihc.ru"
 REMOTE_PORT="22"
 REMOTE_PATH="/home/p837136/www/api.cleansyst.ru/"
-SSH_KEY="$HOME/.ssh/ihc_cursor_deploy_key"
+if [ -f "$HOME/.ssh/ihc_deploy_key" ]; then
+  SSH_KEY="$HOME/.ssh/ihc_deploy_key"
+elif [ -f "$HOME/.ssh/ihc_cursor_deploy_key" ]; then
+  SSH_KEY="$HOME/.ssh/ihc_cursor_deploy_key"
+else
+  SSH_KEY="$HOME/.ssh/ihc_cursor_deploy_key"
+fi
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ ! -f "$SSH_KEY" ]; then
