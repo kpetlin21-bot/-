@@ -86,6 +86,14 @@ textarea{min-height:72px;resize:vertical;}
 .offline-badge{font-size:11px;background:var(--ok-bg);color:var(--brand-dark);padding:3px 10px 3px 22px;border-radius:6px;margin-left:8px;display:none;position:relative;}
 .offline-badge::before{content:'';position:absolute;left:8px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--brand);}
 body.offline .offline-badge{display:inline}
+.draft-banner{display:none;background:var(--surface);border:.5px solid var(--brand);border-radius:12px;padding:12px 14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(41,171,226,.12)}
+.draft-banner.show{display:block}
+.draft-banner p{margin:0 0 10px;font-size:13px;color:var(--text)}
+.draft-banner-actions{display:flex;gap:8px;flex-wrap:wrap}
+.draft-banner-actions button{flex:1;min-width:120px;padding:10px 14px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none}
+.draft-banner-actions .btn-continue{background:var(--brand);color:#fff}
+.draft-banner-actions .btn-reset{background:var(--surface);color:var(--brand-dark);border:.5px solid var(--brand)!important}
+.draft-indicator{position:fixed;left:0;right:0;bottom:calc(72px + env(safe-area-inset-bottom));text-align:center;font-size:12px;color:var(--text2);z-index:29;pointer-events:none;padding:0 14px}
 </style>
 </head>
 <body>
@@ -103,6 +111,13 @@ body.offline .offline-badge{display:inline}
 </div>
 </header>
 <div class="wrap" id="app">
+<div id="draft-banner" class="draft-banner" role="region" aria-label="Черновик чек-листа">
+<p id="draft-banner-text"></p>
+<div class="draft-banner-actions">
+<button type="button" class="btn-continue" id="draft-continue">Продолжить</button>
+<button type="button" class="btn-reset" id="draft-discard">Начать заново</button>
+</div>
+</div>
 <div class="card" id="header-card">
 <label>Жилой комплекс</label>
 <select id="jk-select"><option value="">Загрузка…</option></select>
@@ -125,6 +140,7 @@ body.offline .offline-badge{display:inline}
 <div id="zones-root"></div>
 <p class="page-footer">© Системы Сервиса — cleansyst.ru</p>
 </div>
+<div class="draft-indicator" id="draft-indicator" style="display:none"></div>
 <div class="submit-bar"><button type="button" id="btn-submit">Отправить на сервер</button></div>
 <div class="toast" id="toast"></div>
 <div class="overlay" id="overlay-loading"><div class="spinner"></div><p>Отправка…</p></div>
@@ -144,10 +160,12 @@ const PROXY = '../proxy.php';
 const API_SAVE = './api/checklist/save.php';
 const LS_CACHE = 'checklist_tb_cache';
 const LS_PENDING = 'checklist_pending';
+const LS_DRAFT = 'checklist_draft';
 const FLOOR_ZONES = new Set(['entrance','elevators','mop']);
 
-const state = { projectId:'', jkName:'', manager:'', housesAvailable:[], selectedHouses:{}, items:{} };
+const state = { projectId:'', jkName:'', manager:'', housesAvailable:[], selectedHouses:{}, items:{}, zoneComments:{} };
 let allItemNums = [];
+let suppressDraft = false;
 
 function initItems(){
   allItemNums = [];
@@ -171,6 +189,191 @@ function getUnionEntrances(){
   const s = new Set();
   getSelectedHouses().forEach(h => (h.entrances||[]).forEach(e => s.add(e)));
   return [...s].sort((a,b)=>a-b);
+}
+
+function draftHasContent(d){
+  if(!d) return false;
+  return !!(d.jk?.projectId || d.manager || (d.houses && d.houses.length) ||
+    Object.keys(d.state || {}).length || Object.keys(d.itemComments || {}).length);
+}
+
+function buildDraft(){
+  const stateAnswers = {};
+  const itemComments = {};
+  const floorTags = {};
+  const entranceTags = {};
+  let hadPhotos = false;
+  allItemNums.forEach(num => {
+    const st = state.items[num];
+    if(!st) return;
+    if(st.value) stateAnswers[num] = st.value;
+    if(st.comment) itemComments[num] = st.comment;
+    if(st.floors?.length) floorTags[num] = [...st.floors];
+    if(st.entrances?.length) entranceTags[num] = [...st.entrances];
+    if(st.photos?.length) hadPhotos = true;
+  });
+  const houses = Object.keys(state.selectedHouses).map(k => {
+    const h = state.selectedHouses[k];
+    if(!h?.checked) return null;
+    return {
+      idx: Number(k),
+      addr: h.addr,
+      label: h.label,
+      locationId: h.locationId,
+      floors: h.floors || [1],
+      entrances: h.entrances || [],
+    };
+  }).filter(Boolean);
+  return {
+    jk: { projectId: state.projectId, jkName: state.jkName },
+    manager: state.manager,
+    houses,
+    state: stateAnswers,
+    itemComments,
+    floorTags,
+    entranceTags,
+    zoneComments: state.zoneComments || {},
+    hadPhotos,
+    savedAt: Date.now(),
+  };
+}
+
+function saveDraft(){
+  if(suppressDraft) return;
+  const draft = buildDraft();
+  if(!draftHasContent(draft)) return;
+  try{
+    localStorage.setItem(LS_DRAFT, JSON.stringify(draft));
+    updateDraftIndicator(draft.savedAt);
+  }catch(e){
+    console.warn('draft save failed', e);
+  }
+}
+
+function clearDraft(){
+  localStorage.removeItem(LS_DRAFT);
+  updateDraftIndicator(null);
+}
+
+function updateDraftIndicator(ts){
+  const el = document.getElementById('draft-indicator');
+  if(!el) return;
+  if(!ts){
+    el.style.display = 'none';
+    return;
+  }
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  el.textContent = '💾 Черновик сохранён ' + hh + ':' + mm;
+  el.style.display = 'block';
+}
+
+function loadDraftRaw(){
+  try{
+    return JSON.parse(localStorage.getItem(LS_DRAFT) || 'null');
+  }catch(e){
+    return null;
+  }
+}
+
+function formatDraftWhen(ts){
+  const d = new Date(ts);
+  return d.toLocaleString('ru-RU', { day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' });
+}
+
+function hideDraftBanner(){
+  document.getElementById('draft-banner')?.classList.remove('show');
+}
+
+function showDraftBanner(draft){
+  const banner = document.getElementById('draft-banner');
+  const text = document.getElementById('draft-banner-text');
+  if(!banner || !text) return;
+  text.textContent = 'Найден незавершённый чек-лист от ' + formatDraftWhen(draft.savedAt) + '. Продолжить?';
+  banner.classList.add('show');
+}
+
+function syncHouseRowUI(idx){
+  const cb = document.getElementById('h' + idx);
+  if(!cb) return;
+  const sh = state.selectedHouses[idx];
+  const row = cb.closest('.house-row');
+  if(!row || !sh?.checked) return;
+  row.classList.add('selected');
+  cb.checked = true;
+  row.querySelectorAll('.floors-wrap .pill-btn').forEach(b => {
+    const m = b.textContent.match(/^(\d+)/);
+    if(!m) return;
+    const f = parseInt(m[1], 10);
+    b.classList.toggle('on', sh.floors.includes(f) || f === 1);
+  });
+  row.querySelectorAll('.entrances-wrap .pill-btn').forEach(b => {
+    const m = b.textContent.match(/^(\d+)/);
+    if(!m) return;
+    const e = parseInt(m[1], 10);
+    b.classList.toggle('on', (sh.entrances || []).includes(e));
+  });
+}
+
+async function applyDraft(draft){
+  suppressDraft = true;
+  hideDraftBanner();
+  allItemNums.forEach(num => {
+    const st = state.items[num];
+    st.value = draft.state?.[num] ?? null;
+    st.comment = draft.itemComments?.[num] || '';
+    st.floors = draft.floorTags?.[num] ? [...draft.floorTags[num]] : [];
+    st.entrances = draft.entranceTags?.[num] ? [...draft.entranceTags[num]] : [];
+    st.photos = [];
+  });
+  state.zoneComments = draft.zoneComments || {};
+  state.manager = draft.manager || '';
+  if(draft.manager){
+    document.getElementById('mgr-select').value = draft.manager;
+  }
+  if(draft.jk?.projectId){
+    state.projectId = String(draft.jk.projectId);
+    state.jkName = draft.jk.jkName || '';
+    document.getElementById('jk-select').value = state.projectId;
+    await loadHouses(state.projectId);
+    state.selectedHouses = {};
+    (draft.houses || []).forEach(h => {
+      state.selectedHouses[h.idx] = {
+        checked: true,
+        addr: h.addr,
+        label: h.label,
+        locationId: h.locationId,
+        floors: h.floors?.length ? [...h.floors] : [1],
+        entrances: h.entrances ? [...h.entrances] : [],
+      };
+      syncHouseRowUI(h.idx);
+    });
+  }
+  allItemNums.forEach(num => {
+    const row = document.querySelector('.item[data-item-num="' + num + '"]');
+    if(!row) return;
+    const ta = row.querySelector('textarea');
+    if(ta) ta.value = state.items[num].comment || '';
+    refreshItemRow(num, row);
+  });
+  suppressDraft = false;
+  if(draft.hadPhotos){
+    toast('Фото в черновик не сохраняются — приложите их заново для пунктов с замечаниями');
+  }
+  saveDraft();
+}
+
+function setupDraftBanner(){
+  const draft = loadDraftRaw();
+  if(!draftHasContent(draft)) return;
+  showDraftBanner(draft);
+  document.getElementById('draft-continue').onclick = () => applyDraft(draft);
+  document.getElementById('draft-discard').onclick = () => {
+    clearDraft();
+    hideDraftBanner();
+    location.reload();
+  };
 }
 
 function zoneScore(zone){
@@ -280,7 +483,7 @@ function renderZones(){
       }
       const ta=document.createElement('textarea');
       ta.placeholder='Замечание';
-      ta.oninput=()=>{ state.items[it.num].comment=ta.value; };
+      ta.oninput=()=>{ state.items[it.num].comment=ta.value; saveDraft(); };
       fb.appendChild(ta);
       const warn=document.createElement('div');
       warn.className='warn-photo';
@@ -318,6 +521,7 @@ function refreshItemRow(num, row){
   updateFailFloors(num, row);
   updateFailEntrances(num, row);
   updateScoreUI();
+  saveDraft();
 }
 
 function updateFailEntrances(num, row){
@@ -509,6 +713,7 @@ document.getElementById('btn-submit').onclick=async ()=>{
   document.getElementById('overlay-loading').classList.add('show');
   try{
     await submitChecklist(payload, photoMap);
+    clearDraft();
     const sc=calcScores();
     document.getElementById('success-score').textContent='Итоговая оценка: '+(sc.total!=null?sc.total+'%':'—');
     document.getElementById('overlay-loading').classList.remove('show');
@@ -617,6 +822,7 @@ function renderHouses(houses){
             const n=el.dataset.itemNum;
             if(n) refreshItemRow(n, el);
           });
+          saveDraft();
         };
       }
       fw.appendChild(b);
@@ -636,6 +842,7 @@ function renderHouses(houses){
           const n=el.dataset.itemNum;
           if(n) refreshItemRow(n, el);
         });
+        saveDraft();
       };
       ew.appendChild(b);
     }
@@ -652,6 +859,7 @@ function renderHouses(houses){
         const n=fl.dataset.item;
         if(n) refreshItemRow(n, fl.closest('.item'));
       });
+      saveDraft();
     };
     root.appendChild(row);
   });
@@ -678,9 +886,11 @@ document.getElementById('jk-select').onchange=function(){
   state.jkName=opt?opt.textContent:'';
   state.selectedHouses={};
   if(this.value) loadHouses(this.value);
+  saveDraft();
 };
 document.getElementById('mgr-select').onchange=function(){
   state.manager=this.value;
+  saveDraft();
 };
 
 function setOffline(){
@@ -698,13 +908,17 @@ if('serviceWorker' in navigator){
   });
 }
 
-initItems();
-renderZones();
-loadProjects();
-loadManagers();
-setOffline();
-syncPending();
-updateScoreUI();
+(async function boot(){
+  initItems();
+  renderZones();
+  await Promise.all([loadProjects(), loadManagers()]);
+  setupDraftBanner();
+  const existing = loadDraftRaw();
+  if(draftHasContent(existing)) updateDraftIndicator(existing.savedAt);
+  setOffline();
+  syncPending();
+  updateScoreUI();
+})();
 </script>
 </body>
 </html>
