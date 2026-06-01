@@ -30,7 +30,7 @@ $row['score_containers'] = (float)$row['score_containers'];
 $row['score_cleaning'] = (float)$row['score_cleaning'];
 
 $itemStmt = $pdo->prepare('
-    SELECT zone_id, item_num, value, floors, comment
+    SELECT zone_id, item_num, value, floors, entrances, comment
     FROM checklist_items WHERE checklist_id = ?
     ORDER BY id
 ');
@@ -38,6 +38,7 @@ $itemStmt->execute([$id]);
 $items = $itemStmt->fetchAll();
 foreach ($items as &$it) {
     $it['floors'] = json_decode($it['floors'] ?? '[]', true) ?: [];
+    $it['entrances'] = json_decode($it['entrances'] ?? '[]', true) ?: [];
 }
 unset($it);
 

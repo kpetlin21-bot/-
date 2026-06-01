@@ -485,6 +485,40 @@ switch ($action) {
         break;
 
     // ----------------------------------------------------------
+    //  Менеджеры для чек-листа: [{id, name}]
+    //  ?action=managers
+    // ----------------------------------------------------------
+    case 'managers':
+        $data = tb_get('/users');
+        $managers = [];
+        foreach ($data['data'] ?? [] as $u) {
+            if (($u['state'] ?? '') !== 'enabled') {
+                continue;
+            }
+            $role = $u['role'] ?? '';
+            if (!in_array($role, ['manager', 'admin', 'owner', 'supervisor'], true)) {
+                continue;
+            }
+            $profile = $u['profile'] ?? [];
+            $first = trim($profile['first_name'] ?? $u['first_name'] ?? '');
+            $last  = trim($profile['last_name'] ?? $u['last_name'] ?? '');
+            $name  = trim($first . ' ' . $last);
+            if ($name === '') {
+                $name = trim($u['name'] ?? $u['username'] ?? '');
+            }
+            if ($name === '') {
+                $name = 'Пользователь #' . ($u['id'] ?? '?');
+            }
+            $managers[] = [
+                'id'   => (int)($u['id'] ?? 0),
+                'name' => $name,
+            ];
+        }
+        usort($managers, static fn ($a, $b) => strcmp($a['name'], $b['name']));
+        echo json_encode(['managers' => $managers], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ----------------------------------------------------------
     //  Задачи за диапазон дат (неделя / месяц / вчера)
     //  ?action=period_tasks&date=2026-05-23,2026-05-29
     // ----------------------------------------------------------
@@ -1101,6 +1135,19 @@ switch ($action) {
             }
             return $floors;
         };
+        $countEntrances = function (int $rootId) use ($allLocs): int {
+            $n = 0;
+            foreach ($allLocs as $l) {
+                if ((int)($l['parent_id'] ?? 0) !== $rootId) {
+                    continue;
+                }
+                $name = $l['name'] ?? '';
+                if (preg_match('/секц|подъезд/ui', $name)) {
+                    $n++;
+                }
+            }
+            return $n > 0 ? $n : 1;
+        };
         $houses = [];
         foreach ($allLocs as $loc) {
             if ((int)($loc['project_id'] ?? 0) !== $projectId) {
@@ -1119,11 +1166,15 @@ switch ($action) {
             }
             $parts = explode(' ', trim($locName), 2);
             $addr  = count($parts) > 1 ? $parts[1] : $locName;
+            $availableFloors = $collectFloors($locId);
+            $floorCount = max($availableFloors);
             $houses[] = [
                 'addr'            => $addr,
                 'label'           => $locName,
                 'locationId'      => $locId,
-                'availableFloors' => $collectFloors($locId),
+                'floors'          => $floorCount,
+                'entrances'       => $countEntrances($locId),
+                'availableFloors' => $availableFloors,
             ];
         }
         usort($houses, static fn ($a, $b) => strcmp($a['addr'], $b['addr']));
@@ -1137,7 +1188,8 @@ switch ($action) {
         echo json_encode([
             'endpoints' => [
                 '?action=projects'              => 'Список проектов (найти project_id)',
-                '?project=2&action=houses'      => 'Дома ЖК с этажами (чек-лист)',
+                '?action=managers'              => 'Менеджеры [{id,name}] (чек-лист)',
+                '?project=2&action=houses'      => 'Дома ЖК с этажами и подъездами (чек-лист)',
                 '?action=dashboard&date=today'  => 'Все KPI за дату — основной запрос дашборда',
                 '?action=teams'                 => 'Команды проекта (= дома ЖК)',
                 '?action=locations'             => 'Локации проекта',

@@ -48,8 +48,8 @@ try {
     $checklistId = (int)$pdo->lastInsertId();
 
     $itemStmt = $pdo->prepare('
-        INSERT INTO checklist_items (checklist_id, zone_id, item_num, value, floors, comment)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO checklist_items (checklist_id, zone_id, item_num, value, floors, entrances, comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     ');
 
     foreach ($payload['items'] ?? [] as $item) {
@@ -63,6 +63,7 @@ try {
             $item['item_num'] ?? '',
             $value,
             json_encode($item['floors'] ?? [], JSON_UNESCAPED_UNICODE),
+            json_encode($item['entrances'] ?? [], JSON_UNESCAPED_UNICODE),
             $item['comment'] ?? '',
         ]);
     }
