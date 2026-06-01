@@ -8,10 +8,24 @@ REMOTE_ROOT="/home/p837136/www/api.cleansyst.ru/"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/ihc_cursor_deploy_key}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
-RSYNC_SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=15"
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
 
-if [ ! -f "$SSH_KEY" ]; then
+if [ ! -f "$SSH_KEY" ] && [ -n "${IHC_SSH_PRIVATE_KEY:-}" ]; then
+  printf '%s\n' "$IHC_SSH_PRIVATE_KEY" > "$SSH_KEY"
+  chmod 600 "$SSH_KEY"
+fi
+
+SSH_OPTS=(-o StrictHostKeyChecking=no -o ConnectTimeout=15)
+if [ -f "$SSH_KEY" ]; then
+  SSH_CMD=(ssh -i "$SSH_KEY" "${SSH_OPTS[@]}")
+  RSYNC_SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=15"
+elif [ -n "${SSH_AUTH_SOCK:-}" ] && [ -S "$SSH_AUTH_SOCK" ]; then
+  SSH_CMD=(ssh "${SSH_OPTS[@]}")
+  RSYNC_SSH="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15"
+else
   echo "ERROR: SSH key not found at $SSH_KEY"
+  echo "Set IHC_SSH_PRIVATE_KEY, place key at ~/.ssh/ihc_cursor_deploy_key, or use SSH_AUTH_SOCK"
   exit 1
 fi
 
@@ -21,16 +35,14 @@ rsync -avz -e "$RSYNC_SSH" --exclude='.git' --exclude='_gen_index.py' \
   "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_CHECKLIST}"
 
 echo "=== Deploy proxy.php (houses action) ==="
-scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
-  "$(dirname "$DIR")/proxy.php" \
-  "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_ROOT}proxy.php"
+"${SSH_CMD[@]}" "${REMOTE_USER}@${REMOTE_HOST}" "cat > ${REMOTE_ROOT}proxy.php" < "$(dirname "$DIR")/proxy.php"
 
 echo "=== Create DB tables ==="
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "${REMOTE_USER}@${REMOTE_HOST}" \
+"${SSH_CMD[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
   "mysql -h p837136.mysql.ihc.ru -u p837136_dashbrd -p'Dashboard123' p837136_dashbrd < ${REMOTE_CHECKLIST}sql/schema.sql"
 
 echo "=== Ensure uploads writable ==="
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "${REMOTE_USER}@${REMOTE_HOST}" \
+"${SSH_CMD[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
   "mkdir -p ${REMOTE_CHECKLIST}uploads && chmod 755 ${REMOTE_CHECKLIST}uploads"
 
 echo "=== Done ==="

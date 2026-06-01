@@ -1,0 +1,33 @@
+name: Deploy checklist (SSH)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or tag to deploy
+        required: false
+        default: cursor/cleaning-checklist-pwa-9da8
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup SSH key
+        env:
+          IHC_SSH_PRIVATE_KEY: ${{ secrets.IHC_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$IHC_SSH_PRIVATE_KEY" ]; then
+            echo "IHC_SSH_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$IHC_SSH_PRIVATE_KEY" > ~/.ssh/ihc_cursor_deploy_key
+          chmod 600 ~/.ssh/ihc_cursor_deploy_key
+          ssh-keyscan -H p837136.ftp.ihc.ru >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy checklist
+        run: bash checklist/deploy-checklist.sh
