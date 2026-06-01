@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS checklist_items (
   item_num VARCHAR(10),
   value ENUM('ok','fail','na'),
   floors JSON,
+  entrances JSON,
   comment TEXT,
   FOREIGN KEY (checklist_id) REFERENCES checklists(id) ON DELETE CASCADE
 );
