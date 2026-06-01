@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>История чек-листов</title>
+<style>
+:root{--bg:#F5F4EF;--surface:#FFF;--text:#2C2C2A;--text2:#5F5E5A;--border:rgba(0,0,0,.12);
+--green:#3B6D11;--amber:#BA7517;--red:#A32D2D;}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);padding:16px;}
+.wrap{max-width:960px;margin:0 auto;}
+h1{font-size:20px;margin:0 0 4px;}
+.sub{font-size:13px;color:var(--text2);margin-bottom:16px;}
+a{color:#185FA5;}
+table{width:100%;border-collapse:collapse;background:var(--surface);border-radius:12px;overflow:hidden;font-size:13px;}
+th,td{padding:10px 12px;text-align:left;border-bottom:.5px solid var(--border);}
+th{background:#F1EFE8;color:var(--text2);font-weight:500;}
+tr.data-row{cursor:pointer;}
+tr.data-row:hover{background:#F1EFE8;}
+.pct{font-weight:600;font-variant-numeric:tabular-nums;}
+.pct.good{color:var(--green)}.pct.warn{color:var(--amber)}.pct.bad{color:var(--red)}
+.detail{display:none;padding:16px;background:var(--surface);border:.5px solid var(--border);border-radius:12px;margin:12px 0;}
+.detail.open{display:block;}
+.item-row{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:.5px solid var(--border);font-size:13px;}
+.item-row.fail{color:var(--red);}
+.photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+.photos img{width:80px;height:80px;object-fit:cover;border-radius:8px;}
+.back{display:inline-block;margin-bottom:12px;font-size:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="back" href="index.html">← Чек-лист</a>
+<h1>История проверок</h1>
+<p class="sub" id="subtitle">Загрузка…</p>
+<div id="table-wrap"></div>
+<div id="detail" class="detail"></div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const jk = params.get('jk') || '';
+const API_LIST = './api/checklist/list.php';
+const API_GET = './api/checklist/get.php';
+
+function pctClass(p){ if(p>=80)return 'good'; if(p>=60)return 'warn'; return 'bad'; }
+function fmtDate(s){ if(!s)return '—'; const d=new Date(s.replace(' ','T')); return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function housesStr(h){ if(!h||!h.length)return '—'; return h.map(x=>x.addr+(x.floors?.length?' ('+x.floors.join(',')+' эт.)':'')).join('; '); }
+
+async function loadList(){
+  document.getElementById('subtitle').textContent = jk ? 'ЖК: '+jk : 'Все жилые комплексы';
+  const url = API_LIST + (jk ? '?jk='+encodeURIComponent(jk)+'&limit=100' : '?limit=100');
+  const res = await fetch(url);
+  const data = await res.json();
+  const list = data.checklists || [];
+  if(!list.length){
+    document.getElementById('table-wrap').innerHTML='<p>Нет чек-листов</p>';
+    return;
+  }
+  let html='<table><thead><tr><th>Дата</th><th>Менеджер</th><th>ЖК</th><th>Дома</th><th>Итог</th><th>Территория</th><th>Контейнеры</th><th>Клининг</th></tr></thead><tbody>';
+  list.forEach(c=>{
+    const p=Math.round(c.score_total||0);
+    html+='<tr class="data-row" data-id="'+c.id+'"><td>'+fmtDate(c.checked_at)+'</td><td>'+(c.manager_name||'—')+'</td><td>'+(c.jk_name||'—')+'</td><td>'+housesStr(c.houses)+'</td>';
+    html+='<td class="pct '+pctClass(p)+'">'+p+'%</td>';
+    html+='<td>'+Math.round(c.score_territory||0)+'%</td><td>'+Math.round(c.score_containers||0)+'%</td><td>'+Math.round(c.score_cleaning||0)+'%</td></tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('table-wrap').innerHTML=html;
+  document.querySelectorAll('.data-row').forEach(row=>{
+    row.onclick=()=>showDetail(row.dataset.id);
+  });
+}
+
+async function showDetail(id){
+  const box=document.getElementById('detail');
+  box.classList.add('open');
+  box.innerHTML='<p>Загрузка…</p>';
+  const res=await fetch(API_GET+'?id='+id);
+  const data=await res.json();
+  if(!data.success){ box.innerHTML='<p>Ошибка</p>'; return; }
+  const c=data.checklist;
+  const photosByItem={};
+  (c.photos||[]).forEach(p=>{
+    if(!photosByItem[p.item_num]) photosByItem[p.item_num]=[];
+    photosByItem[p.item_num].push(p.url);
+  });
+  let html='<h2 style="margin:0 0 8px">'+fmtDate(c.checked_at)+' — '+c.manager_name+'</h2>';
+  html+='<p style="font-size:13px;color:var(--text2)">'+c.jk_name+' · '+housesStr(c.houses)+'</p>';
+  html+='<p><b>Итог: '+Math.round(c.score_total)+'%</b> · Территория '+Math.round(c.score_territory)+'% · Контейнеры '+Math.round(c.score_containers)+'% · Клининг '+Math.round(c.score_cleaning)+'%</p>';
+  (c.items||[]).forEach(it=>{
+    const cls=it.value==='fail'?'fail':'';
+    html+='<div class="item-row '+cls+'"><span><b>'+it.item_num+'</b> '+it.value.toUpperCase();
+    if(it.floors?.length) html+=' · этажи: '+it.floors.join(', ');
+    if(it.comment) html+='<br><i>'+it.comment+'</i>';
+    html+='</span></div>';
+    if(photosByItem[it.item_num]){
+      html+='<div class="photos">';
+      photosByItem[it.item_num].forEach(u=>{ html+='<a href="'+u+'" target="_blank"><img src="'+u+'" alt=""></a>'; });
+      html+='</div>';
+    }
+  });
+  box.innerHTML=html;
+  box.scrollIntoView({behavior:'smooth'});
+}
+
+loadList().then(()=>{
+  const id=params.get('id');
+  if(id) showDetail(id);
+});
+</script>
+</body>
+</html>

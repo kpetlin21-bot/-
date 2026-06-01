@@ -1055,12 +1055,89 @@ switch ($action) {
         break;
 
     // ----------------------------------------------------------
+    //  Дома ЖК с этажами (для чек-листа уборки)
+    //  ?action=houses&project=2
+    // ----------------------------------------------------------
+    case 'houses':
+        $projectId = (int)($_GET['project'] ?? TB_PROJECT);
+        if (!$projectId) {
+            echo json_encode(['error' => 'project required'], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $allLocs = get_all_locations();
+        $terrId  = null;
+        foreach ($allLocs as $l) {
+            if ((int)($l['project_id'] ?? 0) !== $projectId) {
+                continue;
+            }
+            if (($l['parent_id'] ?? null) === null && strpos($l['name'] ?? '', 'Территори') !== false) {
+                $terrId = (int)$l['id'];
+                break;
+            }
+        }
+        $collectFloors = function (int $rootId) use ($allLocs): array {
+            $floors = [1];
+            $walk = function (int $parentId) use (&$walk, $allLocs, &$floors): void {
+                foreach ($allLocs as $l) {
+                    if ((int)($l['parent_id'] ?? 0) !== $parentId) {
+                        continue;
+                    }
+                    $name = $l['name'] ?? '';
+                    if (preg_match('/(\d+)\s*[-–]?\s*этаж/ui', $name, $m)) {
+                        $floors[] = (int)$m[1];
+                    } elseif (preg_match('/этаж\s*(\d+)/ui', $name, $m)) {
+                        $floors[] = (int)$m[1];
+                    }
+                    $walk((int)$l['id']);
+                }
+            };
+            $walk($rootId);
+            $floors = array_values(array_unique(array_filter($floors, static fn ($f) => $f >= 1 && $f <= 40)));
+            sort($floors);
+            if (count($floors) === 1) {
+                for ($i = 2; $i <= 17; $i++) {
+                    $floors[] = $i;
+                }
+            }
+            return $floors;
+        };
+        $houses = [];
+        foreach ($allLocs as $loc) {
+            if ((int)($loc['project_id'] ?? 0) !== $projectId) {
+                continue;
+            }
+            if (($loc['parent_id'] ?? null) !== null) {
+                continue;
+            }
+            $locId   = (int)$loc['id'];
+            $locName = $loc['name'] ?? '';
+            if ($terrId !== null && $locId === $terrId) {
+                continue;
+            }
+            if (stripos($locName, 'Офис') !== false) {
+                continue;
+            }
+            $parts = explode(' ', trim($locName), 2);
+            $addr  = count($parts) > 1 ? $parts[1] : $locName;
+            $houses[] = [
+                'addr'            => $addr,
+                'label'           => $locName,
+                'locationId'      => $locId,
+                'availableFloors' => $collectFloors($locId),
+            ];
+        }
+        usort($houses, static fn ($a, $b) => strcmp($a['addr'], $b['addr']));
+        echo json_encode(['project' => $projectId, 'houses' => $houses], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ----------------------------------------------------------
     //  Помощь: список доступных action
     // ----------------------------------------------------------
     default:
         echo json_encode([
             'endpoints' => [
                 '?action=projects'              => 'Список проектов (найти project_id)',
+                '?project=2&action=houses'      => 'Дома ЖК с этажами (чек-лист)',
                 '?action=dashboard&date=today'  => 'Все KPI за дату — основной запрос дашборда',
                 '?action=teams'                 => 'Команды проекта (= дома ЖК)',
                 '?action=locations'             => 'Локации проекта',
