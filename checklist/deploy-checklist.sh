@@ -19,8 +19,20 @@ chmod 700 "$HOME/.ssh"
 # Cloud Agent secret (вариант B): IHC_SSH_PRIVATE_KEY
 SECRET_KEY="${IHC_SSH_PRIVATE_KEY:-${IHC_DEPLOY_KEY:-}}"
 if [ ! -f "$SSH_KEY" ] && [ -n "$SECRET_KEY" ]; then
-  printf '%s\n' "$SECRET_KEY" > "$SSH_KEY"
-  chmod 600 "$SSH_KEY"
+  python3 - "$SSH_KEY" <<'PY'
+import os, re, sys, textwrap
+path = sys.argv[1]
+raw = os.environ.get("IHC_SSH_PRIVATE_KEY") or os.environ.get("IHC_DEPLOY_KEY") or ""
+m = re.search(r"BEGIN OPENSSH PRIVATE KEY-----\s*(.+?)\s*-----END", raw, re.S)
+if m:
+    b64 = re.sub(r"\s+", "", m.group(1))
+    body = "\n".join(textwrap.wrap(b64, 70))
+    pem = "-----BEGIN OPENSSH PRIVATE KEY-----\n" + body + "\n-----END OPENSSH PRIVATE KEY-----\n"
+else:
+    pem = raw if raw.endswith("\n") else raw + "\n"
+open(path, "w").write(pem)
+os.chmod(path, 0o600)
+PY
   echo "Using key from IHC_SSH_PRIVATE_KEY secret"
 fi
 
