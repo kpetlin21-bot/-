@@ -40,6 +40,56 @@ function tb_get(string $path, array $params = []): array {
     return $body !== false ? json_decode($body, true) : ['error' => 'Не удалось подключиться'];
 }
 
+function tb_post(string $path, array $payload): array {
+    $url = TB_BASE_URL . $path;
+    $body = json_encode($payload, JSON_UNESCAPED_UNICODE);
+    $ctx = stream_context_create(['http' => [
+        'method'  => 'POST',
+        'header'  => implode("\r\n", [
+            'Authorization: Api-Key ' . TB_API_KEY,
+            'Accept: application/json',
+            'Content-Type: application/json',
+        ]),
+        'content' => $body,
+        'timeout' => 30,
+        'ignore_errors' => true,
+    ]]);
+    $raw = @file_get_contents($url, false, $ctx);
+    if ($raw === false) {
+        return ['error' => 'Не удалось подключиться'];
+    }
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : ['error' => 'Invalid JSON', 'raw' => substr($raw, 0, 500)];
+}
+
+function load_zone_teams_config(): array {
+    static $cfg = null;
+    if ($cfg === null) {
+        $path = __DIR__ . '/checklist/zone_teams.json';
+        $cfg = is_readable($path)
+            ? (json_decode((string)file_get_contents($path), true) ?: [])
+            : [];
+    }
+    return $cfg;
+}
+
+function zone_team_for(int $projectId, string $zoneId): ?array {
+    $cfg = load_zone_teams_config();
+    $zoneKey = $cfg['zone_types'][$zoneId] ?? null;
+    if (!$zoneKey) {
+        return null;
+    }
+    $proj = $cfg['projects'][(string)$projectId] ?? $cfg['projects'][$projectId] ?? null;
+    if (!$proj) {
+        return null;
+    }
+    $teamId = $proj['zone_teams'][$zoneKey] ?? null;
+    if (!$teamId) {
+        return null;
+    }
+    return ['team_type' => $zoneKey, 'team_id' => (int)$teamId];
+}
+
 // ============================================================
 //  Преобразовать ISO-время (UTC, c 'Z') в DateTime по Москве.
 //  Важно: используем явный часовой пояс, а НЕ ручное прибавление
@@ -163,258 +213,6 @@ function get_yard_map(array $allLocs): array {
 $action = $_GET['action'] ?? 'help';
 $tz_msk = new DateTimeZone('Europe/Moscow');
 $today  = (new DateTime('now', $tz_msk))->format('Y-m-d');
-
-/** Светофор: 100% ok, 80–99% warn, ≤79% crit */
-function traffic_status(int $pct, int $total = -1): string {
-    if ($total === 0) {
-        return 'ok';
-    }
-    if ($pct >= 100) {
-        return 'ok';
-    }
-    if ($pct >= 80) {
-        return 'warn';
-    }
-    return 'crit';
-}
-
-/** today/yesterday → Y-m-d (MSK); иначе дата как есть */
-function normalize_report_date(string $date, DateTimeZone $tz, string $todayStr): string {
-    $d = strtolower(trim($date));
-    if ($d === 'today') {
-        return $todayStr;
-    }
-    if ($d === 'yesterday') {
-        return (new DateTime($todayStr, $tz))->modify('-1 day')->format('Y-m-d');
-    }
-    return $date;
-}
-
-/** done/missed/total за диапазон дат по локации (сумма по дням) */
-function location_period_counts(string $dateRange, int $locId): array {
-    $complete = true;
-    $all      = tb_get_all('/reports/tasks', [
-        'date'     => $dateRange,
-        'project'  => TB_PROJECT,
-        'location' => $locId . '*',
-    ], $complete);
-    $done = 0;
-    $missed = 0;
-    foreach ($all as $t) {
-        $st = $t['status'] ?? '';
-        if ($st === 'done') {
-            $done++;
-        } elseif ($st === 'missed') {
-            $missed++;
-        }
-    }
-    $total = $done + $missed;
-    return [
-        'done'     => $done,
-        'missed'   => $missed,
-        'total'    => $total,
-        'pct'      => $total > 0 ? round($done / $total * 100) : 0,
-        'complete' => $complete,
-    ];
-}
-
-/** МОП за период (неделя/месяц) — сумма по секциям */
-function mop_stats_for_house_period(int $houseLocId, string $dateRange, array $allLocs): array {
-    $sections = array_values(array_filter($allLocs, function ($l) use ($houseLocId) {
-        return (int)$l['parent_id'] === $houseLocId;
-    }));
-
-    $mopDone = 0;
-    $mopMiss = 0;
-    $zones   = [];
-
-    if ($sections) {
-        foreach ($sections as $sec) {
-            $sid    = (int)$sec['id'];
-            $bundle = location_period_counts($dateRange, $sid);
-            $d      = $bundle['done'];
-            $m      = $bundle['missed'];
-            $mopDone += $d;
-            $mopMiss += $m;
-            $zones[] = [
-                'name' => $sec['name'], 'id' => $sid,
-                'done' => $d, 'missed' => $m, 'total' => $bundle['total'],
-                'pct'  => $bundle['pct'],
-            ];
-        }
-    } else {
-        $bundle  = location_period_counts($dateRange, $houseLocId);
-        $mopDone = $bundle['done'];
-        $mopMiss = $bundle['missed'];
-    }
-
-    return ['done' => $mopDone, 'missed' => $mopMiss, 'zones' => $zones];
-}
-
-/** ПДТ за период */
-function pdt_stats_for_yard_period(?int $yardId, string $dateRange): array {
-    if ($yardId === null) {
-        return ['done' => 0, 'missed' => 0];
-    }
-    $c = location_period_counts($dateRange, $yardId);
-    return ['done' => $c['done'], 'missed' => $c['missed']];
-}
-
-/** Задачи по локации (поддерево location=id*) */
-function count_location_tasks(string $date, int $locId, string $status): int {
-    $r = tb_get('/reports/tasks', [
-        'date'     => $date,
-        'project'  => TB_PROJECT,
-        'status'   => $status,
-        'location' => $locId . '*',
-        'limit'    => 250,
-    ]);
-    return count($r['data'] ?? []);
-}
-
-/**
- * МОП дома: сумма по секциям (как в house_detail).
- * Если секций нет — запрос по корню дома.
- */
-function mop_stats_for_house(int $houseLocId, string $date, array $allLocs, bool $withTasks = false): array {
-    $sections = array_values(array_filter($allLocs, function ($l) use ($houseLocId) {
-        return (int)$l['parent_id'] === $houseLocId;
-    }));
-
-    $mopDone = 0;
-    $mopMiss = 0;
-    $zones   = [];
-
-    $rootTasks = [];
-
-    if ($sections) {
-        foreach ($sections as $sec) {
-            $sid = (int)$sec['id'];
-            if ($withTasks) {
-                $bundle  = location_tasks_bundle($sid, $date);
-                $d       = $bundle['done'];
-                $m       = $bundle['missed'];
-                $zones[] = [
-                    'name' => $sec['name'], 'id' => $sid,
-                    'done' => $d, 'missed' => $m, 'total' => $bundle['total'],
-                    'pct'  => $bundle['pct'], 'tasks' => $bundle['tasks'],
-                ];
-            } else {
-                $d = count_location_tasks($date, $sid, 'done');
-                $m = count_location_tasks($date, $sid, 'missed');
-                $zones[] = [
-                    'name' => $sec['name'], 'id' => $sid,
-                    'done' => $d, 'missed' => $m, 'total' => $d + $m,
-                    'pct'  => ($d + $m) > 0 ? round($d / ($d + $m) * 100) : 0,
-                ];
-            }
-            $mopDone += $d;
-            $mopMiss += $m;
-        }
-    } else {
-        if ($withTasks) {
-            $bundle    = location_tasks_bundle($houseLocId, $date);
-            $mopDone   = $bundle['done'];
-            $mopMiss   = $bundle['missed'];
-            $rootTasks = $bundle['tasks'];
-        } else {
-            $mopDone = count_location_tasks($date, $houseLocId, 'done');
-            $mopMiss = count_location_tasks($date, $houseLocId, 'missed');
-        }
-    }
-
-    $out = ['done' => $mopDone, 'missed' => $mopMiss, 'zones' => $zones];
-    if ($withTasks && $rootTasks) {
-        $out['tasks'] = $rootTasks;
-    }
-    return $out;
-}
-
-/** ПДТ — двор из «Территории» */
-function pdt_stats_for_yard(?int $yardId, string $date): array {
-    if ($yardId === null) {
-        return ['done' => 0, 'missed' => 0];
-    }
-    return [
-        'done'   => count_location_tasks($date, $yardId, 'done'),
-        'missed' => count_location_tasks($date, $yardId, 'missed'),
-    ];
-}
-
-/** Все задачи по локации за дату (без фильтра статуса) */
-function fetch_location_tasks_raw(string $date, int $locId): array {
-    $r = tb_get('/reports/tasks', [
-        'date'     => $date,
-        'project'  => TB_PROJECT,
-        'location' => $locId . '*',
-        'limit'    => 250,
-    ]);
-    return $r['data'] ?? [];
-}
-
-/** Строка задачи для дашборда: название, статус, время (MSK) */
-function format_report_task_row(array $t): array {
-    $dt = msk_dt($t['started_at'] ?? null);
-    return [
-        'name'   => ($t['task']['name'] ?? null) ?: '—',
-        'status' => $t['status'] ?? '',
-        'time'   => $dt ? $dt->format('H:i') : null,
-    ];
-}
-
-/** Список задач по локации (секция, двор, дом) */
-function location_task_list(int $locId, string $date): array {
-    $raw = fetch_location_tasks_raw($date, $locId);
-    $order = ['done' => 0, 'in_progress' => 1, 'pending' => 2, 'available' => 3, 'missed' => 4];
-    usort($raw, function ($a, $b) use ($order) {
-        $sa = $a['status'] ?? '';
-        $sb = $b['status'] ?? '';
-        $oa = $order[$sa] ?? 5;
-        $ob = $order[$sb] ?? 5;
-        if ($oa !== $ob) {
-            return $oa - $ob;
-        }
-        $ta = $a['started_at'] ?? '';
-        $tb = $b['started_at'] ?? '';
-        if ($ta !== $tb) {
-            if ($ta === '') return 1;
-            if ($tb === '') return -1;
-            return strcmp($ta, $tb);
-        }
-        return strcmp(($a['task']['name'] ?? ''), ($b['task']['name'] ?? ''));
-    });
-    $items = [];
-    foreach ($raw as $t) {
-        $st = $t['status'] ?? '';
-        if (!in_array($st, ['done', 'missed', 'in_progress', 'pending', 'available'], true)) {
-            continue;
-        }
-        $items[] = format_report_task_row($t);
-    }
-    return $items;
-}
-
-/** Задачи + агрегаты done/missed/total для одной локации */
-function location_tasks_bundle(int $locId, string $date): array {
-    $tasks  = location_task_list($locId, $date);
-    $done   = 0;
-    $missed = 0;
-    foreach ($tasks as $t) {
-        if (($t['status'] ?? '') === 'done') {
-            $done++;
-        } elseif (($t['status'] ?? '') === 'missed') {
-            $missed++;
-        }
-    }
-    $total = $done + $missed;
-    return [
-        'tasks'  => $tasks,
-        'done'   => $done,
-        'missed' => $missed,
-        'total'  => $total,
-        'pct'    => $total > 0 ? round($done / $total * 100) : 0,
-    ];
-}
 
 switch ($action) {
 
@@ -781,17 +579,11 @@ switch ($action) {
     //  ?action=house_breakdown&date=2026-05-29
     // ----------------------------------------------------------
     case 'house_breakdown':
-        $rawDate = $_GET['date'] ?? $today;
-        $isRange = (strpos($rawDate, ',') !== false);
-        $date    = $isRange ? $rawDate : normalize_report_date($rawDate, $tz_msk, $today);
-        set_time_limit($isRange ? 600 : 300);
+        set_time_limit(120);
+        $date = $_GET['date'] ?? $today;
+        $cacheFile = sys_get_temp_dir() . '/tb_hb_' . TB_PROJECT . '_' . $date . '.json';
 
-        $cacheFile = sys_get_temp_dir() . '/'
-            . ($isRange ? 'tb_hbp_' : 'tb_hb_') . TB_PROJECT . '_'
-            . ($isRange ? md5($date) : $date) . '.json';
-        $cacheTtl = $isRange ? 3900 : 900;
-
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtl) {
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 900) {
             header('X-Cache: HIT');
             echo file_get_contents($cacheFile);
             break;
@@ -815,22 +607,19 @@ switch ($action) {
             $parts   = explode(' ', trim($locName), 2);
             $houseId = count($parts) > 1 ? $parts[1] : $locName;
 
-            if ($isRange) {
-                $mop     = mop_stats_for_house_period((int)$locId, $date, $allLocs);
-                $mopDone = $mop['done'];
-                $mopMiss = $mop['missed'];
-                $yardId  = $yardMap[$houseId] ?? null;
-                $pdt     = pdt_stats_for_yard_period($yardId !== null ? (int)$yardId : null, $date);
-                $pdtDone = $pdt['done'];
-                $pdtMiss = $pdt['missed'];
-            } else {
-                $mop     = mop_stats_for_house((int)$locId, $date, $allLocs);
-                $mopDone = $mop['done'];
-                $mopMiss = $mop['missed'];
-                $yardId  = $yardMap[$houseId] ?? null;
-                $pdt     = pdt_stats_for_yard($yardId !== null ? (int)$yardId : null, $date);
-                $pdtDone = $pdt['done'];
-                $pdtMiss = $pdt['missed'];
+            // МОП — всё внутри дома (подъезды/этажи)
+            $done   = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$locId.'*','limit'=>250]);
+            $missed = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$locId.'*','limit'=>250]);
+            $mopDone = count($done['data'] ?? []);
+            $mopMiss = count($missed['data'] ?? []);
+
+            // ПДТ — двор этого дома из «Территории»
+            $pdtDone = 0; $pdtMiss = 0; $yardId = $yardMap[$houseId] ?? null;
+            if ($yardId !== null) {
+                $yd = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$yardId.'*','limit'=>250]);
+                $ym = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$yardId.'*','limit'=>250]);
+                $pdtDone = count($yd['data'] ?? []);
+                $pdtMiss = count($ym['data'] ?? []);
             }
 
             // Светофор дома = МОП + ПДТ вместе
@@ -838,7 +627,7 @@ switch ($action) {
             $mc = $mopMiss + $pdtMiss;
             $total = $dc + $mc;
             $rate  = $total > 0 ? round($dc/$total*100) : 100; // нет задач = 100%
-            $status = traffic_status($rate, $total);
+            $status = $total === 0 ? 'ok' : ($rate>=90 ? 'ok' : ($rate>=70 ? 'warn' : 'crit'));
 
             $mopTot = $mopDone + $mopMiss;
             $pdtTot = $pdtDone + $pdtMiss;
@@ -851,16 +640,7 @@ switch ($action) {
         }
 
         usort($houses, function($a,$b){ return $a['pct'] - $b['pct']; });
-        $parts = explode(',', $date);
-        $result = json_encode([
-            'date'        => $date,
-            'dateFrom'    => $parts[0] ?? $date,
-            'dateTo'      => $parts[1] ?? ($parts[0] ?? $date),
-            'periodRange' => $isRange,
-            'periodLabel' => $isRange ? 'сумма по дням' : null,
-            'houses'      => $houses,
-            'cached'      => false,
-        ], JSON_UNESCAPED_UNICODE);
+        $result = json_encode(['date'=>$date,'houses'=>$houses,'cached'=>false], JSON_UNESCAPED_UNICODE);
         file_put_contents($cacheFile, $result);
         echo $result;
         break;
@@ -875,10 +655,10 @@ switch ($action) {
     //    Всего = МОП + ПДТ
     // ----------------------------------------------------------
     case 'house_detail':
-        set_time_limit(180);
+        set_time_limit(120);
         $locId = (int)($_GET['location_id'] ?? 0);
         if (!$locId) { echo json_encode(['error'=>'location_id required']); break; }
-        $date = normalize_report_date($_GET['date'] ?? $today, $tz_msk, $today);
+        $date = $_GET['date'] ?? $today;
 
         $allLocs  = get_all_locations();
         $yardMap  = get_yard_map($allLocs);
@@ -890,34 +670,33 @@ switch ($action) {
         if ($houseLoc) { $p = explode(' ', trim($houseLoc['name']), 2); $houseId = count($p)>1 ? $p[1] : $houseLoc['name']; }
         $yardId   = $yardMap[$houseId] ?? null;
 
-        $mop      = mop_stats_for_house($locId, $date, $allLocs, true);
-        $mopDone  = $mop['done'];
-        $mopMiss  = $mop['missed'];
-        $mopZones = $mop['zones'];
-        $mopTot   = $mopDone + $mopMiss;
-        $mopOut   = [
-            'done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,
-            'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0,'zones'=>$mopZones,
-        ];
-        if (!empty($mop['tasks'])) {
-            $mopOut['tasks'] = $mop['tasks'];
-        }
+        // Секции (прямые дети дома)
+        $sections = array_values(array_filter($allLocs, function($l) use ($locId) {
+            return (int)$l['parent_id'] === $locId;
+        }));
 
-        $pdtDone = 0; $pdtMiss = 0; $pdtTot = 0; $pdtTasks = [];
-        $pdtYardName = null;
-        if ($yardId !== null) {
-            $pdtBundle   = location_tasks_bundle((int)$yardId, $date);
-            $pdtDone     = $pdtBundle['done'];
-            $pdtMiss     = $pdtBundle['missed'];
-            $pdtTot      = $pdtBundle['total'];
-            $pdtTasks    = $pdtBundle['tasks'];
-            foreach ($allLocs as $l) {
-                if ((int)$l['id'] === (int)$yardId) {
-                    $pdtYardName = $l['name'] ?? null;
-                    break;
-                }
-            }
+        // МОП = задачи по каждой секции (с wildcard = включая этажи)
+        $mopZones = []; $mopDone = 0; $mopMiss = 0;
+        foreach ($sections as $sec) {
+            $sd = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$sec['id'].'*','limit'=>250]);
+            $sm = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$sec['id'].'*','limit'=>250]);
+            $d  = count($sd['data'] ?? []);
+            $m  = count($sm['data'] ?? []);
+            $mopDone += $d; $mopMiss += $m;
+            $t  = $d + $m;
+            $mopZones[] = ['name'=>$sec['name'],'id'=>$sec['id'],'done'=>$d,'missed'=>$m,'total'=>$t,'pct'=> $t>0?round($d/$t*100):0];
         }
+        $mopTot = $mopDone + $mopMiss;
+
+        // ПДТ = двор этого дома из «Территории»
+        $pdtDone = 0; $pdtMiss = 0;
+        if ($yardId !== null) {
+            $yd = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'done','location'=>$yardId.'*','limit'=>250]);
+            $ym = tb_get('/reports/tasks', ['date'=>$date,'project'=>TB_PROJECT,'status'=>'missed','location'=>$yardId.'*','limit'=>250]);
+            $pdtDone = count($yd['data'] ?? []);
+            $pdtMiss = count($ym['data'] ?? []);
+        }
+        $pdtTot  = $pdtDone + $pdtMiss;
 
         $houseDone = $mopDone + $pdtDone;
         $houseMiss = $mopMiss + $pdtMiss;
@@ -927,13 +706,8 @@ switch ($action) {
             'date'   => $date,
             'locId'  => $locId,
             'total'  => ['done'=>$houseDone,'missed'=>$houseMiss,'total'=>$houseTot],
-            'mop'    => $mopOut,
-            'pdt'    => [
-                'done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,
-                'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,
-                'yardId'=>$yardId,'yardName'=>$pdtYardName,'hasYard'=>$yardId!==null,
-                'tasks'=>$pdtTasks,
-            ],
+            'mop'    => ['done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0,'zones'=>$mopZones],
+            'pdt'    => ['done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,'yardId'=>$yardId,'hasYard'=>$yardId!==null],
         ], JSON_UNESCAPED_UNICODE);
         break;
 
@@ -1055,7 +829,7 @@ switch ($action) {
         break;
 
     // ----------------------------------------------------------
-    //  Дома ЖК с этажами (для чек-листа уборки)
+    //  Дома ЖК с этажами (чек-лист)
     //  ?action=houses&project=2
     // ----------------------------------------------------------
     case 'houses':
@@ -1127,7 +901,113 @@ switch ($action) {
             ];
         }
         usort($houses, static fn ($a, $b) => strcmp($a['addr'], $b['addr']));
-        echo json_encode(['project' => $projectId, 'houses' => $houses], JSON_UNESCAPED_UNICODE);
+        echo json_encode([
+            'project'          => $projectId,
+            'terr_location_id' => $terrId,
+            'houses'           => $houses,
+        ], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ----------------------------------------------------------
+    //  Создать задачу в ThroneBaron (чек-лист → замечания)
+    //  POST ?action=create_task  JSON body
+    // ----------------------------------------------------------
+    case 'create_task':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'POST required'], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $in = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($in)) {
+            $in = $_POST;
+        }
+
+        $projectId  = (int)($in['project_id'] ?? 0);
+        $locationId = (int)($in['location_id'] ?? 0);
+        $zoneId     = (string)($in['zone_id'] ?? '');
+        $zoneNum    = (string)($in['zone_num'] ?? '');
+        $itemLabel  = (string)($in['item_label'] ?? '');
+        $addr       = (string)($in['addr'] ?? '');
+        $entrances  = (string)($in['entrances'] ?? '');
+        $floors     = (string)($in['floors'] ?? '');
+        $comment    = (string)($in['comment'] ?? '');
+
+        if (!$projectId || !$locationId || $zoneId === '') {
+            echo json_encode(['success' => false, 'error' => 'project_id, location_id и zone_id обязательны'], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+
+        $teamInfo = zone_team_for($projectId, $zoneId);
+        if (!$teamInfo) {
+            echo json_encode([
+                'success' => false,
+                'error'   => 'Нет zone_teams для project_id=' . $projectId . ', zone_id=' . $zoneId,
+            ], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+
+        $tz = new DateTimeZone('Europe/Moscow');
+        if (!empty($in['start_at'])) {
+            try {
+                $startDt = new DateTime((string)$in['start_at'], $tz);
+            } catch (Exception $e) {
+                $startDt = new DateTime('tomorrow', $tz);
+                $startDt->setTime(6, 0, 0);
+            }
+        } else {
+            $startDt = new DateTime('tomorrow', $tz);
+            $startDt->setTime(6, 0, 0);
+        }
+        $startDt->setTimezone(new DateTimeZone('UTC'));
+        $startAt = $startDt->format('Y-m-d\TH:i:s.000\Z');
+
+        $titleNum = $zoneNum !== '' ? $zoneNum : $zoneId;
+        $name = '[' . $titleNum . '] ' . ($itemLabel !== '' ? $itemLabel : 'Замечание по чек-листу');
+
+        $descLines = ['Дом: ' . ($addr !== '' ? $addr : '—')];
+        if ($entrances !== '') {
+            $descLines[] = 'Подъезд: ' . $entrances;
+        }
+        if ($floors !== '') {
+            $descLines[] = 'Этаж: ' . $floors;
+        }
+        if ($comment !== '') {
+            $descLines[] = 'Замечание: ' . $comment;
+        }
+        $description = implode("\n", $descLines);
+
+        $tbPayload = [
+            'project_id'  => $projectId,
+            'location_id' => $locationId,
+            'name'        => $name,
+            'description' => $description,
+            'assignee'    => 't' . $teamInfo['team_id'],
+            'schedule'    => [
+                'start_at'  => $startAt,
+                'recurrent' => false,
+            ],
+            'settings'    => ['photo_required' => true],
+        ];
+
+        $resp = tb_post('/tasks', $tbPayload);
+
+        if (isset($resp['error']) && !isset($resp['data'])) {
+            echo json_encode([
+                'success' => false,
+                'error'   => is_string($resp['error']) ? $resp['error'] : ($resp['message'] ?? 'TB error'),
+                'tb'      => $resp,
+            ], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+
+        $taskId = $resp['data']['id'] ?? $resp['id'] ?? null;
+        echo json_encode([
+            'success'   => true,
+            'task_id'   => $taskId,
+            'team_type' => $teamInfo['team_type'],
+            'team_id'   => $teamInfo['team_id'],
+        ], JSON_UNESCAPED_UNICODE);
         break;
 
     // ----------------------------------------------------------
@@ -1138,6 +1018,7 @@ switch ($action) {
             'endpoints' => [
                 '?action=projects'              => 'Список проектов (найти project_id)',
                 '?project=2&action=houses'      => 'Дома ЖК с этажами (чек-лист)',
+                'POST ?action=create_task'      => 'Создать задачу TB из чек-листа (JSON body)',
                 '?action=dashboard&date=today'  => 'Все KPI за дату — основной запрос дашборда',
                 '?action=teams'                 => 'Команды проекта (= дома ЖК)',
                 '?action=locations'             => 'Локации проекта',

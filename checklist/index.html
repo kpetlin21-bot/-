@@ -78,6 +78,25 @@ textarea{min-height:72px;resize:vertical;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .offline-badge{font-size:11px;background:var(--amber);color:#fff;padding:2px 8px;border-radius:6px;margin-left:8px;display:none;}
 body.offline .offline-badge{display:inline}
+.tb-modal-overlay{position:fixed;inset:0;background:rgba(44,44,42,.45);z-index:60;display:none;align-items:center;justify-content:center;padding:16px;}
+.tb-modal-overlay.show{display:flex;}
+.tb-modal{background:#fff;border-radius:14px;max-width:420px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.18);}
+.tb-modal-h{padding:16px 18px;border-bottom:.5px solid var(--border);background:linear-gradient(180deg,#E8F6FC,#fff);}
+.tb-modal-h h2{margin:0;font-size:17px;font-weight:600;color:#185FA5;}
+.tb-modal-h p{margin:6px 0 0;font-size:12px;color:var(--text2);}
+.tb-modal-b{padding:14px 18px 18px;}
+.tb-group{margin-bottom:14px;}
+.tb-group-title{font-size:13px;font-weight:600;color:#29ABE2;margin:0 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.tb-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#E8F6FC;color:#185FA5;}
+.tb-task-row{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-bottom:8px;line-height:1.35;}
+.tb-task-row input{width:auto;margin-top:3px;flex-shrink:0;}
+.tb-date{width:100%;font:inherit;padding:8px 10px;border:.5px solid rgba(0,0,0,.22);border-radius:8px;margin-top:4px;}
+.tb-progress{font-size:13px;color:var(--text2);margin:10px 0;min-height:18px;}
+.tb-modal-actions{display:flex;gap:10px;margin-top:14px;}
+.tb-modal-actions button{flex:1;padding:12px;font-size:14px;font-weight:600;border-radius:10px;border:none;cursor:pointer;}
+.tb-btn-primary{background:#29ABE2;color:#fff;}
+.tb-btn-primary:disabled{opacity:.55;cursor:default;}
+.tb-btn-secondary{background:var(--surface2);color:var(--text);}
 </style>
 </head>
 <body>
@@ -117,16 +136,38 @@ body.offline .offline-badge{display:inline}
 <p>Отправится автоматически при появлении сети</p>
 <button type="button" onclick="location.reload()" style="margin-top:16px;padding:12px 24px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:15px;cursor:pointer">OK</button>
 </div>
+<div class="tb-modal-overlay" id="tb-tasks-modal" aria-hidden="true">
+  <div class="tb-modal" role="dialog" aria-labelledby="tb-modal-title">
+    <div class="tb-modal-h">
+      <h2 id="tb-modal-title">🔧 Создать задачи по замечаниям</h2>
+      <p>Команды МОП/ПДТ подбираются автоматически</p>
+    </div>
+    <div class="tb-modal-b">
+      <div id="tb-task-groups"></div>
+      <label style="font-size:12px;color:var(--text2);margin-top:8px;display:block">Дата выполнения</label>
+      <input type="date" class="tb-date" id="tb-task-date">
+      <div class="tb-progress" id="tb-task-progress"></div>
+      <div class="tb-modal-actions">
+        <button type="button" class="tb-btn-primary" id="tb-btn-create">✓ Создать задачи</button>
+        <button type="button" class="tb-btn-secondary" id="tb-btn-skip">Пропустить</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script>
 const ZONES = [{"id": "territory", "group": "territory", "title": "1. Прилегающая территория", "parkingNa": false, "items": [{"num": "1.1", "text": "Дорожное покрытие, проезды, бордюры, ливневые решётки", "naAllowed": false}, {"num": "1.2", "text": "Парковочные места", "naAllowed": false}, {"num": "1.3", "text": "Тротуары, пешеходные дорожки", "naAllowed": false}, {"num": "1.4", "text": "Газон", "naAllowed": false}, {"num": "1.5", "text": "Деревья, кустарники, цветники", "naAllowed": false}, {"num": "1.6", "text": "Покраска: люки, разметка, МАФ, бордюры", "naAllowed": false}, {"num": "1.7", "text": "МАФ: лавочки, беседки, вазоны, светильники", "naAllowed": false}, {"num": "1.8", "text": "Детские площадки", "naAllowed": false}, {"num": "1.9", "text": "Спортивные площадки", "naAllowed": false}, {"num": "1.10", "text": "Мусорные урны", "naAllowed": false}, {"num": "1.11", "text": "Входные группы: урны, ступени, пандус, фасад", "naAllowed": false}, {"num": "1.12", "text": "Козырьки входных групп", "naAllowed": false}, {"num": "1.13", "text": "Элементы благоустройства: столбики, фонари, стенды", "naAllowed": false}]}, {"id": "containers", "group": "containers", "title": "2. Контейнерные площадки", "parkingNa": false, "items": [{"num": "2.1", "text": "Мусор в контейнерах (не переполнены)", "naAllowed": false}, {"num": "2.2", "text": "Мусор и посторонние предметы на площадке", "naAllowed": false}, {"num": "2.3", "text": "Чистота: пол, стены, дверь МСК", "naAllowed": false}, {"num": "2.4", "text": "Отсутствие неприятного запаха", "naAllowed": false}]}, {"id": "entrance", "group": "cleaning", "title": "3. Входная группа (1 этаж)", "parkingNa": false, "items": [{"num": "3.1", "text": "Входная дверь, остекление до 1,7м, стены", "naAllowed": false}, {"num": "3.2", "text": "Остекление выше 1,7м", "naAllowed": false}, {"num": "3.3", "text": "Грязезащитные ковры", "naAllowed": false}, {"num": "3.4", "text": "Горизонтальные поверхности: ящики, подоконники, батареи", "naAllowed": false}, {"num": "3.5", "text": "Пол, плинтуса", "naAllowed": false}, {"num": "3.6", "text": "Стены, стекло до 1,7м", "naAllowed": false}, {"num": "3.7", "text": "Стены, стекло выше 1,7м", "naAllowed": false}, {"num": "3.8", "text": "Информационная доска, график уборки", "naAllowed": false}]}, {"id": "elevators", "group": "cleaning", "title": "4. Лифты", "parkingNa": false, "items": [{"num": "4.1", "text": "Пол внутри лифта", "naAllowed": false}, {"num": "4.2", "text": "Наличники, двери, полозья", "naAllowed": false}, {"num": "4.3", "text": "Кнопки, стены, зеркала, поручни", "naAllowed": false}, {"num": "4.4", "text": "Потолок, плафоны", "naAllowed": false}]}, {"id": "mop", "group": "cleaning", "title": "5. МОП (этажи)", "parkingNa": false, "items": [{"num": "5.1", "text": "Двери в МОП", "naAllowed": false}, {"num": "5.2", "text": "Горизонтальные поверхности до 1,7м", "naAllowed": false}, {"num": "5.3", "text": "Пол, плинтуса", "naAllowed": false}, {"num": "5.4", "text": "Строительный мусор, вещи жильцов", "naAllowed": false}, {"num": "5.5", "text": "Окна до 1,7м", "naAllowed": false}, {"num": "5.6", "text": "Стены (реклама, загрязнения)", "naAllowed": false}, {"num": "5.7", "text": "Поверхности выше 1,7м", "naAllowed": false}, {"num": "5.8", "text": "Плафоны, вентиляционные решётки", "naAllowed": false}, {"num": "5.9", "text": "Пожарная лестница: личные вещи", "naAllowed": false}, {"num": "5.10", "text": "Пожарная лестница: пол, стены, перила", "naAllowed": false}]}, {"id": "office", "group": "other", "title": "6. Офис УК", "parkingNa": false, "items": [{"num": "6.1", "text": "Входная дверь, фасад, тамбур", "naAllowed": false}, {"num": "6.2", "text": "Клиентская зона: пол, стены, мебель, урны", "naAllowed": false}, {"num": "6.3", "text": "Санузел: пол, стены, зеркало, сантехника", "naAllowed": false}]}, {"id": "parking", "group": "other", "title": "7. Паркинг", "parkingNa": true, "items": [{"num": "7.1", "text": "Покрытие: лужи, мусор, масло", "naAllowed": true}, {"num": "7.2", "text": "Строительный мусор, вещи жильцов", "naAllowed": true}, {"num": "7.3", "text": "Стены: вандальные надписи", "naAllowed": true}, {"num": "7.4", "text": "Фасад: объявления", "naAllowed": true}]}];
 const PROXY = '../proxy.php';
+const PROXY_CREATE = '../proxy.php?action=create_task';
 const API_SAVE = './api/checklist/save.php';
+const ZONE_TEAMS_URL = './zone_teams.json';
 const LS_CACHE = 'checklist_tb_cache';
 const LS_PENDING = 'checklist_pending';
 const FLOOR_ZONES = new Set(['entrance','elevators','mop']);
 
-const state = { projectId:'', jkName:'', manager:'', housesAvailable:[], selectedHouses:{}, items:{} };
+const state = { projectId:'', jkName:'', manager:'', housesAvailable:[], selectedHouses:{}, items:{}, terrLocationId:null };
 let allItemNums = [];
+let zoneTeamsConfig = null;
+let pendingTaskRows = [];
 
 function initItems(){
   allItemNums = [];
@@ -368,6 +409,187 @@ function buildPayload(){
   };
 }
 
+function tomorrowDateInput(){
+  const d=new Date();
+  d.setDate(d.getDate()+1);
+  return d.toISOString().slice(0,10);
+}
+
+async function loadZoneTeams(){
+  try{
+    const r=await fetch(ZONE_TEAMS_URL);
+    if(r.ok) zoneTeamsConfig=await r.json();
+  }catch(e){ zoneTeamsConfig=null; }
+}
+
+function projectHasZoneTeams(pid){
+  return !!(zoneTeamsConfig && zoneTeamsConfig.projects && zoneTeamsConfig.projects[String(pid)]);
+}
+
+function zoneTypeLabel(zoneId){
+  const t=zoneTeamsConfig?.zone_types?.[zoneId];
+  return t||'—';
+}
+
+function collectFailedTaskRows(){
+  const rows=[];
+  const houses=getSelectedHouses();
+  if(!houses.length) return rows;
+  const zoneById={};
+  ZONES.forEach(z=>{ zoneById[z.id]=z; });
+
+  ZONES.forEach(zone=>{
+    zone.items.forEach(it=>{
+      const st=state.items[it.num];
+      if(st.value!=='fail') return;
+      const isFloor=FLOOR_ZONES.has(zone.id);
+      if(isFloor){
+        const itemFloors=(st.floors&&st.floors.length)?[...st.floors]:[1];
+        houses.forEach(h=>{
+          itemFloors.forEach(f=>{
+            rows.push({
+              id: it.num+'-'+h.locationId+'-'+f,
+              zone_id: zone.id,
+              zone_num: it.num,
+              item_label: it.text,
+              comment: st.comment||'',
+              addr: h.addr,
+              location_id: h.locationId,
+              floors: String(f),
+              entrances: '',
+              team_type: zoneTypeLabel(zone.id),
+            });
+          });
+        });
+      } else {
+        const locId=state.terrLocationId||houses[0].locationId;
+        rows.push({
+          id: it.num+'-pdt',
+          zone_id: zone.id,
+          zone_num: it.num,
+          item_label: it.text,
+          comment: st.comment||'',
+          addr: houses.map(x=>x.addr).join(', '),
+          location_id: locId,
+          floors: '',
+          entrances: '',
+          team_type: zoneTypeLabel(zone.id),
+        });
+      }
+    });
+  });
+  return rows;
+}
+
+function renderTasksModal(rows){
+  pendingTaskRows=rows.map(r=>({...r, checked:true}));
+  const byType={ МОП:[], ПДТ:[] };
+  pendingTaskRows.forEach(r=>{
+    const k=r.team_type==='ПДТ'?'ПДТ':'МОП';
+    byType[k].push(r);
+  });
+  const root=document.getElementById('tb-task-groups');
+  root.innerHTML='';
+  ['МОП','ПДТ'].forEach(type=>{
+    const list=byType[type];
+    if(!list.length) return;
+    const g=document.createElement('div');
+    g.className='tb-group';
+    const teamId=zoneTeamsConfig?.projects?.[String(state.projectId)]?.zone_teams?.[type];
+    g.innerHTML='<p class="tb-group-title">'+type+' — команда автоподобрана ('+list.length+' шт.) <span class="tb-tag">t'+(teamId||'?')+'</span></p>';
+    list.forEach(row=>{
+      const label='['+row.zone_num+'] '+row.item_label+
+        (row.floors?' — д.'+row.addr+', эт.'+row.floors:(row.addr?' — '+row.addr:''));
+      const div=document.createElement('label');
+      div.className='tb-task-row';
+      div.innerHTML='<input type="checkbox" data-id="'+row.id+'" checked><span>'+label+'</span>';
+      div.querySelector('input').onchange=e=>{ row.checked=e.target.checked; updateCreateBtnLabel(); };
+      g.appendChild(div);
+    });
+    root.appendChild(g);
+  });
+  document.getElementById('tb-task-date').value=tomorrowDateInput();
+  updateCreateBtnLabel();
+}
+
+function updateCreateBtnLabel(){
+  const n=pendingTaskRows.filter(r=>r.checked).length;
+  const btn=document.getElementById('tb-btn-create');
+  btn.textContent=n?'✓ Создать '+n+' задач':'✓ Создать задачи';
+  btn.disabled=n===0;
+}
+
+function showSuccessOverlay(){
+  const sc=calcScores();
+  document.getElementById('success-score').textContent='Итоговая оценка: '+(sc.total!=null?sc.total+'%':'—');
+  document.getElementById('overlay-success').classList.add('show');
+}
+
+function openTasksModal(rows){
+  renderTasksModal(rows);
+  document.getElementById('tb-tasks-modal').classList.add('show');
+  document.getElementById('tb-tasks-modal').setAttribute('aria-hidden','false');
+  document.getElementById('tb-task-progress').textContent='';
+}
+
+function closeTasksModal(){
+  document.getElementById('tb-tasks-modal').classList.remove('show');
+  document.getElementById('tb-tasks-modal').setAttribute('aria-hidden','true');
+}
+
+async function createTasksInTB(){
+  const selected=pendingTaskRows.filter(r=>r.checked);
+  if(!selected.length){ closeTasksModal(); showSuccessOverlay(); return; }
+  const dateVal=document.getElementById('tb-task-date').value||tomorrowDateInput();
+  const startAt=dateVal+'T06:00:00';
+  const prog=document.getElementById('tb-task-progress');
+  const btnCreate=document.getElementById('tb-btn-create');
+  const btnSkip=document.getElementById('tb-btn-skip');
+  btnCreate.disabled=true;
+  btnSkip.disabled=true;
+  const errors=[];
+  let ok=0;
+  for(let i=0;i<selected.length;i++){
+    const row=selected[i];
+    prog.textContent='Создаю задачи… '+(i+1)+' / '+selected.length;
+    try{
+      const res=await fetch(PROXY_CREATE,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          project_id: +state.projectId,
+          location_id: row.location_id,
+          zone_id: row.zone_id,
+          zone_num: row.zone_num,
+          item_label: row.item_label,
+          addr: row.addr,
+          entrances: row.entrances,
+          floors: row.floors,
+          comment: row.comment,
+          start_at: startAt,
+        }),
+      });
+      const json=await res.json();
+      if(!json.success) throw new Error(json.error||'Ошибка TB');
+      ok++;
+    }catch(e){
+      errors.push('['+row.zone_num+'] '+row.item_label+': '+(e.message||'ошибка'));
+    }
+  }
+  closeTasksModal();
+  btnCreate.disabled=false;
+  btnSkip.disabled=false;
+  if(ok>0) toast('✅ Создано '+ok+' задач в ThroneBaron');
+  if(errors.length){
+    toast('Не создано: '+errors.length+' — '+errors.slice(0,2).join('; '));
+    console.warn('TB create_task errors', errors);
+  }
+  showSuccessOverlay();
+}
+
+document.getElementById('tb-btn-create').onclick=()=>createTasksInTB();
+document.getElementById('tb-btn-skip').onclick=()=>{ closeTasksModal(); showSuccessOverlay(); };
+
 async function submitChecklist(payload, photoMap){
   const fd=new FormData();
   fd.append('data', JSON.stringify(payload));
@@ -449,10 +671,16 @@ document.getElementById('btn-submit').onclick=async ()=>{
   document.getElementById('overlay-loading').classList.add('show');
   try{
     await submitChecklist(payload, photoMap);
-    const sc=calcScores();
-    document.getElementById('success-score').textContent='Итоговая оценка: '+(sc.total!=null?sc.total+'%':'—');
     document.getElementById('overlay-loading').classList.remove('show');
-    document.getElementById('overlay-success').classList.add('show');
+    const failedRows=collectFailedTaskRows();
+    if(failedRows.length && projectHasZoneTeams(state.projectId)){
+      openTasksModal(failedRows);
+    } else {
+      if(failedRows.length && !projectHasZoneTeams(state.projectId)){
+        toast('Чек-лист сохранён. TB: нет zone_teams для этого ЖК');
+      }
+      showSuccessOverlay();
+    }
   }catch(e){
     document.getElementById('overlay-loading').classList.remove('show');
     toast(e.message||'Ошибка отправки');
@@ -578,11 +806,16 @@ async function loadHouses(projectId){
   try{
     const data=await fetchJSON(PROXY+'?action=houses&project='+projectId);
     const houses=data.houses||[];
+    state.terrLocationId=data.terr_location_id||null;
     cacheSet('houses_'+projectId, houses);
+    cacheSet('terr_'+projectId, state.terrLocationId);
     renderHouses(houses);
   }catch(e){
     const cached=cacheGet('houses_'+projectId);
-    if(cached) renderHouses(cached);
+  if(cached){
+    state.terrLocationId=cacheGet('terr_'+projectId)||null;
+    renderHouses(cached);
+  }
     else { root.innerHTML='<p style="color:var(--red)">Ошибка загрузки домов</p>'; toast('Ошибка загрузки домов'); }
   }
 }
@@ -615,6 +848,7 @@ if('serviceWorker' in navigator){
 
 initItems();
 renderZones();
+loadZoneTeams();
 loadProjects();
 loadManagers();
 setOffline();
