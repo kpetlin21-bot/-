@@ -92,8 +92,9 @@ if (isEmbed) {
 
 const TB_PROJECT_ID = 9;
 const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
-const OVERPASS_QUERY = '[out:json][timeout:25];way[building](56.782,60.654,56.79,60.663);out body;>;out skel qt;';
-const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](56.782,60.654,56.79,60.663);out body;>;out skel qt;';
+const OVERPASS_BBOX = '56.779,60.651,56.793,60.666';
+const OVERPASS_QUERY = '[out:json][timeout:25];way[building](' + OVERPASS_BBOX + ');out body;>;out skel qt;';
+const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](' + OVERPASS_BBOX + ');out body;>;out skel qt;';
 
 const STYLES = {
   green:  { fillColor: '#C8E6A0', color: '#639922', weight: 2, fillOpacity: 0.65 },
@@ -280,10 +281,18 @@ function bindHouseInteraction(layer, house, tags) {
 }
 
 async function fetchOverpassQuery(query) {
+  console.log('Overpass query:', query);
   const url = '/api/overpass.php?data=' + encodeURIComponent(query);
   const r = await fetch(url);
+  const text = await r.text();
   if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
-  return r.json();
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{')) {
+    const errMatch = trimmed.match(/<strong[^>]*>Error<\/strong>:\s*([^<]+)/i);
+    const msg = errMatch ? errMatch[1].trim() : 'Overpass вернул не-JSON (возможно сервер перегружен)';
+    throw new Error(msg);
+  }
+  return JSON.parse(trimmed);
 }
 
 async function fetchOverpass() {

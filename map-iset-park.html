@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>River Park — Карта объекта</title>
+  <title>ЖК Исеть парк — Карта объекта</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -60,9 +60,9 @@
 </head>
 <body>
   <header class="header">
-    <h1>River Park — Карта объекта</h1>
+    <h1>ЖК Исеть парк — Карта объекта</h1>
     <nav class="header-nav">
-      <a href="/river-park.html">← Дашборд</a>
+      <a href="/iset-park.html">← Дашборд</a>
       <a href="/home.html">Все объекты</a>
     </nav>
   </header>
@@ -90,9 +90,9 @@ if (isEmbed) {
   document.querySelector('.header').style.display = 'none';
 }
 
-const TB_PROJECT_ID = 15;
+const TB_PROJECT_ID = 7;
 const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
-const OVERPASS_BBOX = '56.832,60.613,56.846,60.628';
+const OVERPASS_BBOX = '56.797,60.636,56.81,60.65';
 const OVERPASS_QUERY = '[out:json][timeout:25];way[building](' + OVERPASS_BBOX + ');out body;>;out skel qt;';
 const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](' + OVERPASS_BBOX + ');out body;>;out skel qt;';
 
@@ -324,6 +324,7 @@ function drawBuildings(polys) {
   for (const h of tbHouses) {
     const tbKey = tbKeyFromLabel(h.label);
     const p = findOsmPolyForTbHouse(h);
+    console.log('TB:', tbKey, '→ OSM match:', !!p);
     if (!p) continue;
     drawn++;
     const st = styleForHouse(h);
@@ -390,7 +391,7 @@ document.getElementById('detail-modal').onclick = (e) => {
 };
 
 async function init() {
-  map = L.map('map', { scrollWheelZoom: true, minZoom: 16, maxZoom: 19 }).setView([56.8389, 60.62], 17);
+  map = L.map('map', { scrollWheelZoom: true, minZoom: 16, maxZoom: 19 }).setView([56.8029, 60.6414], 17);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap © CARTO',
     subdomains: 'abcd',

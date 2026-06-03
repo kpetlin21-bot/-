@@ -37,7 +37,7 @@ GEOCODE = {
 }
 
 
-def expand_bbox(south, west, north, east, min_lat=0.009, min_lon=0.009):
+def expand_bbox(south, west, north, east, min_lat=0.014, min_lon=0.014):
     r3 = lambda x: round(x, 3)
     lat_span = north - south
     lon_span = east - west
