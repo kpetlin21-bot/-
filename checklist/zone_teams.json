@@ -1,0 +1,21 @@
+{
+  "projects": {
+    "1": {
+      "name": "ЖК Астрид",
+      "zone_teams": { "ПДТ": 4, "МОП": 7 }
+    },
+    "12": {
+      "name": "ЖК Нокса парк",
+      "zone_teams": { "ПДТ": 9, "МОП": 12 }
+    }
+  },
+  "zone_types": {
+    "territory": "ПДТ",
+    "containers": "ПДТ",
+    "parking": "ПДТ",
+    "entrance": "МОП",
+    "elevators": "МОП",
+    "mop": "МОП",
+    "office": "МОП"
+  }
+}

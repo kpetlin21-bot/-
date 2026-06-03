@@ -10,7 +10,7 @@
 bash deploy-checklist.sh
 ```
 
-Требуется SSH-ключ `~/.ssh/ihc_cursor_deploy_key`.
+SSH-ключ: `~/.ssh/ihc_deploy_key` или `~/.ssh/ihc_cursor_deploy_key`.
 
 ## Интеграция в дашборд ЖК
 
