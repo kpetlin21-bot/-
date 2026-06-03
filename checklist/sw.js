@@ -1,4 +1,4 @@
-const CACHE_NAME = 'checklist-v20260603-1820';
+const CACHE_NAME = 'checklist-v20260603-2';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './history.html'];
 
 self.addEventListener('install', (e) => {
