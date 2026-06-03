@@ -1,0 +1,429 @@
+severity,code,sheet,row,project,client,field,message,amount
+critical,REFUSED_WITH_DEBT,Uchet_sdelok,2,ЖК Рыбацкое,ООО Самолет УК,,"Отказ + дебиторка 1,248,777.58",1248777.58
+critical,REFUSED_WITH_DEBT,Uchet_sdelok,3,ЖК Рыбацкое,ООО Самолет УК,,"Отказ + дебиторка 1,077,308.12",1077308.12
+critical,REFUSED_WITH_DEBT,Uchet_sdelok,10,ЖК Курортный,ООО Самолет УК,,"Отказ + дебиторка 383,352.69",383352.69
+critical,REFUSED_WITH_DEBT,Uchet_sdelok,15,ЖК Рыбацкое,ООО Самолет УК,,"Отказ + дебиторка 572,356.11",572356.11
+critical,REFUSED_WITH_DEBT,Uchet_sdelok,16,ЖК Рыбацкое,ООО Самолет УК,,"Отказ + дебиторка 395,012.88",395012.88
+critical,REFUSED_WITH_DEBT,bez_ryb_NK,59,ЖК Курортный,ООО Самолет УК,,"Отказ + дебиторка 44,374.73",44374.73
+error,EMPTY_PROJECT,bez_ryb_NK,277,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,277,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,277,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,278,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,278,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,278,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,279,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,279,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,279,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,280,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,280,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,280,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,281,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,281,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,281,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,282,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,282,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,282,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,283,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,283,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,283,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,284,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,284,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,284,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,285,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,285,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,285,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,286,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,286,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,286,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,287,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,287,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,287,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,288,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,288,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,288,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,289,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,289,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,289,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,290,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,290,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,290,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,291,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,291,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,291,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,292,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,292,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,292,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,293,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,293,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,293,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,294,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,294,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,294,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,295,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,295,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,295,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,296,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,296,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,296,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,297,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,297,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,297,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,298,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,298,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,298,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,299,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,299,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,299,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,300,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,300,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,300,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,301,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,301,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,301,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,302,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,302,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,302,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,303,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,303,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,303,,,,Некорректное «Осталось получить»,
+error,EMPTY_PROJECT,bez_ryb_NK,304,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,304,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,304,,,,Некорректное «Осталось получить»,
+error,EMPTY_DDS,bez_ryb_NK,305,ЖК Курортный,,,Пустая статья ДДС,
+error,EMPTY_PROJECT,bez_ryb_NK,306,,,,Пустой проект,
+error,EMPTY_DDS,bez_ryb_NK,306,,,,Пустая статья ДДС,
+error,BAD_REMAINING,bez_ryb_NK,306,,,,Некорректное «Осталось получить»,
+warn,DEBT_NO_PLAN_DATE,Uchet_sdelok,2,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1248777.58
+warn,PLACEHOLDER_DATE,Uchet_sdelok,2,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,Uchet_sdelok,3,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1077308.12
+warn,PLACEHOLDER_DATE,Uchet_sdelok,3,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,6,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,7,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,8,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,9,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,10,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,Uchet_sdelok,15,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,572356.11
+warn,PLACEHOLDER_DATE,Uchet_sdelok,15,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,Uchet_sdelok,16,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,395012.88
+warn,PLACEHOLDER_DATE,Uchet_sdelok,19,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,20,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,21,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,22,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,23,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,24,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,43,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,44,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,45,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,46,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,47,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,48,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,64,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,65,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,84,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,85,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,104,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,105,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,124,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,125,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,143,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,144,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,164,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,Uchet_sdelok,165,ЖК Астрид,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,PLACEHOLDER_DATE,bez_ryb_NK,22,ЖК Космонавтов 11,,Срок подписание акта по п 4.6,Placeholder: 9.1.1900,
+warn,PLACEHOLDER_DATE,bez_ryb_NK,23,ЖК Исеть Парк,,Срок подписание акта по п 4.6,Placeholder: 9.1.1900,
+warn,PLACEHOLDER_DATE,bez_ryb_NK,24,ЖК Утес,,Срок подписание акта по п 4.6,Placeholder: 9.1.1900,
+warn,PLACEHOLDER_DATE,bez_ryb_NK,42,ЖК Космонавтов 11,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,57,ЖК Курортный,,,Дебиторка без даты плана поступления,69571.8
+warn,PLACEHOLDER_DATE,bez_ryb_NK,57,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,59,ЖК Курортный,,,Дебиторка без даты плана поступления,44374.73
+warn,PLACEHOLDER_DATE,bez_ryb_NK,59,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,65,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1791676.56
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,66,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,903397.19
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,67,ЖК Утес,,,Дебиторка без даты плана поступления,262988.48
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,68,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,480526.6
+warn,PLACEHOLDER_DATE,bez_ryb_NK,68,ЖК Нокса Парк,,Срок подписание акта по п 4.6,Placeholder: 9.1.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,69,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,PLACEHOLDER_DATE,bez_ryb_NK,69,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,70,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1412096.11
+warn,PLACEHOLDER_DATE,bez_ryb_NK,70,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,71,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1176625.45
+warn,PLACEHOLDER_DATE,bez_ryb_NK,71,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,72,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,73,ЖК Новое К,,,Дебиторка без даты плана поступления,857075.74
+warn,PLACEHOLDER_DATE,bez_ryb_NK,73,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,74,ЖК Новое К,,,Дебиторка без даты плана поступления,582952.74
+warn,PLACEHOLDER_DATE,bez_ryb_NK,74,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,75,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,PLACEHOLDER_DATE,bez_ryb_NK,75,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,76,ЖК Новое К,,,Дебиторка без даты плана поступления,346086.21
+warn,PLACEHOLDER_DATE,bez_ryb_NK,76,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,77,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,78,ЖК Астрид,,,Дебиторка без даты плана поступления,386661.24
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,79,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,PLACEHOLDER_DATE,bez_ryb_NK,79,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,80,ЖК Курортный,,,Дебиторка без даты плана поступления,405467.25
+warn,PLACEHOLDER_DATE,bez_ryb_NK,80,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,81,ЖК Курортный,,,Дебиторка без даты плана поступления,822304.85
+warn,PLACEHOLDER_DATE,bez_ryb_NK,81,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,82,ЖК Курортный,,,Дебиторка без даты плана поступления,932969.73
+warn,PLACEHOLDER_DATE,bez_ryb_NK,82,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,83,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1791676.56
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,84,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,322031.72
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,85,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,267263.32
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,86,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,903397.19
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,87,ЖК Утес,,,Дебиторка без даты плана поступления,262988.48
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,88,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,595852.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,89,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,PLACEHOLDER_DATE,bez_ryb_NK,89,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,90,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1412096.11
+warn,PLACEHOLDER_DATE,bez_ryb_NK,90,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,91,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1176625.45
+warn,PLACEHOLDER_DATE,bez_ryb_NK,91,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,92,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,93,ЖК Новое К,,,Дебиторка без даты плана поступления,857075.74
+warn,PLACEHOLDER_DATE,bez_ryb_NK,93,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,94,ЖК Новое К,,,Дебиторка без даты плана поступления,582952.74
+warn,PLACEHOLDER_DATE,bez_ryb_NK,94,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,95,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,PLACEHOLDER_DATE,bez_ryb_NK,95,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,96,ЖК Новое К,,,Дебиторка без даты плана поступления,346086.21
+warn,PLACEHOLDER_DATE,bez_ryb_NK,96,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,97,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,98,ЖК Астрид,,,Дебиторка без даты плана поступления,386661.24
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,99,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,PLACEHOLDER_DATE,bez_ryb_NK,99,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,100,ЖК Курортный,,,Дебиторка без даты плана поступления,405467.25
+warn,PLACEHOLDER_DATE,bez_ryb_NK,100,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,101,ЖК Курортный,,,Дебиторка без даты плана поступления,822304.85
+warn,PLACEHOLDER_DATE,bez_ryb_NK,101,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,102,ЖК Курортный,,,Дебиторка без даты плана поступления,932969.73
+warn,PLACEHOLDER_DATE,bez_ryb_NK,102,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,103,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,903397.19
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,104,ЖК Утес,,,Дебиторка без даты плана поступления,262988.48
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,105,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,595852.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,106,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,PLACEHOLDER_DATE,bez_ryb_NK,106,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,107,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1077308.12
+warn,PLACEHOLDER_DATE,bez_ryb_NK,107,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,108,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,950000.0
+warn,PLACEHOLDER_DATE,bez_ryb_NK,108,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,109,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,110,ЖК Новое К,,,Дебиторка без даты плана поступления,713043.88
+warn,PLACEHOLDER_DATE,bez_ryb_NK,110,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,111,ЖК Новое К,,,Дебиторка без даты плана поступления,459100.14
+warn,PLACEHOLDER_DATE,bez_ryb_NK,111,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,112,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,PLACEHOLDER_DATE,bez_ryb_NK,112,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,113,ЖК Новое К,,,Дебиторка без даты плана поступления,287048.06
+warn,PLACEHOLDER_DATE,bez_ryb_NK,113,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,114,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,115,ЖК Астрид,,,Дебиторка без даты плана поступления,228370.58
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,116,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,PLACEHOLDER_DATE,bez_ryb_NK,116,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,117,ЖК Курортный,,,Дебиторка без даты плана поступления,287784.93
+warn,PLACEHOLDER_DATE,bez_ryb_NK,117,ЖК Курортный,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,118,ЖК Курортный,,,Дебиторка без даты плана поступления,461430.77
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,119,ЖК Курортный,,,Дебиторка без даты плана поступления,932969.73
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,120,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1486782.15
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,121,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1791676.56
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,122,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,322032.72
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,123,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,749636.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,124,ЖК Утес,,,Дебиторка без даты плана поступления,218229.04
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,125,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,529581.35
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,126,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,PLACEHOLDER_DATE,bez_ryb_NK,126,ЖК Рыбацкое,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,127,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1077308.12
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,128,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,950000.0
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,129,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,130,ЖК Новое К,,,Дебиторка без даты плана поступления,713043.88
+warn,PLACEHOLDER_DATE,bez_ryb_NK,130,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,131,ЖК Новое К,,,Дебиторка без даты плана поступления,459100.14
+warn,PLACEHOLDER_DATE,bez_ryb_NK,131,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,132,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,PLACEHOLDER_DATE,bez_ryb_NK,132,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,133,ЖК Новое К,,,Дебиторка без даты плана поступления,287048.06
+warn,PLACEHOLDER_DATE,bez_ryb_NK,133,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,134,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,135,ЖК Астрид,,,Дебиторка без даты плана поступления,228370.58
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,136,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,137,ЖК Курортный,,,Дебиторка без даты плана поступления,287784.93
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,138,ЖК Курортный,,,Дебиторка без даты плана поступления,461430.77
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,139,ЖК Курортный,,,Дебиторка без даты плана поступления,932969.73
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,140,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1486782.15
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,141,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,267264.32
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,142,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,749636.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,143,ЖК Утес,,,Дебиторка без даты плана поступления,218229.04
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,144,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,529581.35
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,145,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,146,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1077308.12
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,147,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,950000.0
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,148,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,149,ЖК Новое К,,,Дебиторка без даты плана поступления,713043.88
+warn,PLACEHOLDER_DATE,bez_ryb_NK,149,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,150,ЖК Новое К,,,Дебиторка без даты плана поступления,459100.14
+warn,PLACEHOLDER_DATE,bez_ryb_NK,150,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,151,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,PLACEHOLDER_DATE,bez_ryb_NK,151,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,152,ЖК Новое К,,,Дебиторка без даты плана поступления,287048.06
+warn,PLACEHOLDER_DATE,bez_ryb_NK,152,ЖК Новое К,,Срок подписание акта по п 4.6,Placeholder: 09.01.1900,
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,153,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,154,ЖК Астрид,,,Дебиторка без даты плана поступления,228370.58
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,155,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,156,ЖК Курортный,,,Дебиторка без даты плана поступления,287784.93
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,157,ЖК Курортный,,,Дебиторка без даты плана поступления,461430.77
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,158,ЖК Курортный,,,Дебиторка без даты плана поступления,932969.73
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,159,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1486782.15
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,160,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,267265.32
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,161,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,749636.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,162,ЖК Утес,,,Дебиторка без даты плана поступления,218229.04
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,163,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,529581.35
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,164,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,165,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1077308.12
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,166,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,950000.0
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,167,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,168,ЖК Новое К,,,Дебиторка без даты плана поступления,713043.88
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,169,ЖК Новое К,,,Дебиторка без даты плана поступления,459100.14
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,170,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,171,ЖК Новое К,,,Дебиторка без даты плана поступления,287048.06
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,172,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,173,ЖК Астрид,,,Дебиторка без даты плана поступления,228370.58
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,174,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,175,ЖК Курортный,,,Дебиторка без даты плана поступления,287784.93
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,176,ЖК Курортный,,,Дебиторка без даты плана поступления,461430.77
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,177,ЖК Курортный,,,Дебиторка без даты плана поступления,932969.73
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,178,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1486782.15
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,179,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,267266.32
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,180,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,749636.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,181,ЖК Утес,,,Дебиторка без даты плана поступления,218229.04
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,182,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,529581.35
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,183,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,184,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1077308.12
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,185,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,950000.0
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,186,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,187,ЖК Новое К,,,Дебиторка без даты плана поступления,713043.88
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,188,ЖК Новое К,,,Дебиторка без даты плана поступления,459100.14
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,189,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,190,ЖК Новое К,,,Дебиторка без даты плана поступления,287048.06
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,191,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,192,ЖК Астрид,,,Дебиторка без даты плана поступления,228370.58
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,193,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,194,ЖК Курортный,,,Дебиторка без даты плана поступления,287784.93
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,195,ЖК Курортный,,,Дебиторка без даты плана поступления,461430.77
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,196,ЖК Курортный,,,Дебиторка без даты плана поступления,932969.73
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,197,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1486782.15
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,198,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,267267.32
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,199,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,749636.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,200,ЖК Утес,,,Дебиторка без даты плана поступления,218229.04
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,201,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,529581.35
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,202,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,203,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1077308.12
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,204,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,950000.0
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,205,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,206,ЖК Новое К,,,Дебиторка без даты плана поступления,713043.88
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,207,ЖК Новое К,,,Дебиторка без даты плана поступления,459100.14
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,208,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,209,ЖК Новое К,,,Дебиторка без даты плана поступления,287048.06
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,210,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,211,ЖК Астрид,,,Дебиторка без даты плана поступления,228370.58
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,212,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,213,ЖК Курортный,,,Дебиторка без даты плана поступления,287784.93
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,214,ЖК Курортный,,,Дебиторка без даты плана поступления,461430.77
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,216,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1486782.15
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,217,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,267268.32
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,218,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,749636.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,219,ЖК Утес,,,Дебиторка без даты плана поступления,218229.04
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,220,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,529581.35
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,221,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,222,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1077308.12
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,223,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,950000.0
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,224,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,225,ЖК Новое К,,,Дебиторка без даты плана поступления,713043.88
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,226,ЖК Новое К,,,Дебиторка без даты плана поступления,459100.14
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,227,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,228,ЖК Новое К,,,Дебиторка без даты плана поступления,287048.06
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,229,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,230,ЖК Астрид,,,Дебиторка без даты плана поступления,228370.58
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,231,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,232,ЖК Курортный,,,Дебиторка без даты плана поступления,287784.93
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,233,ЖК Курортный,,,Дебиторка без даты плана поступления,461430.77
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,234,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1486782.15
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,235,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,267269.32
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,236,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,749636.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,237,ЖК Утес,,,Дебиторка без даты плана поступления,218229.04
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,238,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,529581.35
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,239,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,240,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1412096.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,241,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1176625.45
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,242,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,243,ЖК Новое К,,,Дебиторка без даты плана поступления,857075.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,244,ЖК Новое К,,,Дебиторка без даты плана поступления,582952.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,245,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,246,ЖК Новое К,,,Дебиторка без даты плана поступления,346086.21
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,247,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,248,ЖК Астрид,,,Дебиторка без даты плана поступления,386661.24
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,250,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,251,ЖК Курортный,,,Дебиторка без даты плана поступления,405467.25
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,252,ЖК Курортный,,,Дебиторка без даты плана поступления,822304.85
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,254,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1791676.56
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,255,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,322032.72
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,256,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,903397.19
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,257,ЖК Утес,,,Дебиторка без даты плана поступления,262988.48
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,258,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,595852.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,259,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1560971.98
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,260,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1412096.11
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,261,ЖК Рыбацкое,,,Дебиторка без даты плана поступления,1176625.45
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,262,ЖК Новое К,,,Дебиторка без даты плана поступления,677663.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,263,ЖК Новое К,,,Дебиторка без даты плана поступления,857075.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,264,ЖК Новое К,,,Дебиторка без даты плана поступления,582952.74
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,265,ЖК Новое К,,,Дебиторка без даты плана поступления,335188.08
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,266,ЖК Новое К,,,Дебиторка без даты плана поступления,346086.21
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,267,ЖК Астрид,,,Дебиторка без даты плана поступления,425589.99
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,268,ЖК Астрид,,,Дебиторка без даты плана поступления,386661.24
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,269,ЖК Курортный,,,Дебиторка без даты плана поступления,575041.2
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,270,ЖК Курортный,,,Дебиторка без даты плана поступления,405467.25
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,271,ЖК Курортный,,,Дебиторка без даты плана поступления,822304.85
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,272,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,1791676.56
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,273,ЖК Космонавтов 11,,,Дебиторка без даты плана поступления,322032.72
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,274,ЖК Исеть Парк,,,Дебиторка без даты плана поступления,903397.19
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,275,ЖК Утес,,,Дебиторка без даты плана поступления,262988.48
+warn,DEBT_NO_PLAN_DATE,bez_ryb_NK,276,ЖК Нокса Парк,,,Дебиторка без даты плана поступления,595852.98
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,5,ЖК Рыбацкое,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,6,ЖК Рыбацкое,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,8,ЖК Рыбацкое,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,9,ЖК Рыбацкое,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,10,ЖК Курортный,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,11,ЖК Курортный,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,12,ЖК Курортный,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,13,ЖК Курортный,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,14,ЖК Астрид,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,15,ЖК Астрид,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,16,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,17,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,18,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,19,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,20,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,21,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,22,ЖК Космонавтов 11,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,23,ЖК Исеть Парк,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,24,ЖК Утес,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,25,ЖК Космонавтов 11,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,26,ЖК Рыбацкое,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,27,ЖК Рыбацкое,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,28,ЖК Рыбацкое,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,29,ЖК Курортный,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,30,ЖК Курортный,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,31,ЖК Курортный,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,32,ЖК Курортный,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,33,ЖК Астрид,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,34,ЖК Астрид,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,36,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,37,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,38,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,39,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,40,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,42,ЖК Космонавтов 11,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,44,ЖК Исеть Парк,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,45,ЖК Утес,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,53,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,54,ЖК Новое К,,,"Оплачено, но дата плана заполнена",
+info,PAID_BUT_PLAN_DATE,bez_ryb_NK,58,ЖК Курортный,,,"Оплачено, но дата плана заполнена",

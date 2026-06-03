@@ -1,0 +1,37 @@
+{
+  "uchet_2026": {
+    "rows": 182,
+    "paid": 0,
+    "partial": 0,
+    "unpaid": 182
+  },
+  "bez_ryb_nk": {
+    "rows": 305,
+    "paid": 45,
+    "partial": 1,
+    "unpaid": 259
+  },
+  "master_journal": {
+    "rows": 407,
+    "paid": 45,
+    "partial": 1,
+    "unpaid": 361,
+    "added_from_uchet_only": 102,
+    "merged_overlap": 247
+  },
+  "issues": {
+    "critical": 6,
+    "error": 88,
+    "warn": 294,
+    "info": 40
+  },
+  "issues_by_code": {
+    "REFUSED_WITH_DEBT": 6,
+    "EMPTY_PROJECT": 29,
+    "EMPTY_DDS": 30,
+    "BAD_REMAINING": 29,
+    "DEBT_NO_PLAN_DATE": 215,
+    "PLACEHOLDER_DATE": 79,
+    "PAID_BUT_PLAN_DATE": 40
+  }
+}
