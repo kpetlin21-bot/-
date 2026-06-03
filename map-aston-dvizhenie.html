@@ -306,7 +306,9 @@ function renderRoads(rdData) {
 }
 
 function renderBuildings(bldData) {
-  drawBuildings(parseOverpass(bldData));
+  console.log('Cache loaded OK, elements:', (bldData.elements || []).length);
+  window.__debugBuildingsData = bldData;
+  drawBuildings(parseOverpass(bldData), bldData);
 }
 
 async function loadBuildingsFromOverpass() {
@@ -327,9 +329,10 @@ async function loadBuildings() {
     if (bldResp.ok && rdResp.ok) {
       const bld = await bldResp.json();
       const rd = await rdResp.json();
+      console.log('Cache loaded OK, elements:', (bld.elements || []).length);
       renderRoads(rd);
       renderBuildings(bld);
-      return;
+      return { buildingsData: bld };
     }
   } catch (e) {}
   console.warn('Кеш недоступен, запрос к Overpass...');
@@ -352,10 +355,32 @@ function indexHouses(breakdown) {
     const key = tbKeyFromLabel(h.label);
     if (key) housesByNum[key] = h;
   }
+  console.log('TB house_breakdown keys:', Object.keys(housesByNum));
+  console.log('TB data sample:', JSON.stringify(Object.entries(housesByNum).slice(0, 3)));
 }
 
-function drawBuildings(polys) {
+function drawBuildings(polys, buildingsData) {
   buildOsmIndex(polys);
+  if (buildingsData) {
+    console.log('Buildings elements:', (buildingsData.elements || []).length);
+  }
+  let osmDbg = 0;
+  for (const p of polys) {
+    if (!p.tags['addr:housenumber'] || osmDbg >= 10) continue;
+    const osmKey = normalizeHouseNum(p.tags['addr:housenumber']) + '|' + normalizeStreet(p.tags['addr:street'] || '');
+    console.log('OSM addr:street:', p.tags['addr:street'],
+      'addr:housenumber:', p.tags['addr:housenumber'],
+      '→ key:', osmKey,
+      'TB match:', !!housesByNum[osmKey]);
+    osmDbg++;
+  }
+  let tbDbg = 0;
+  for (const h of tbHouses) {
+    if (tbDbg >= 10) break;
+    const tbKey = tbKeyFromLabel(h.label);
+    console.log('TB label:', h.label, '→ key:', tbKey, 'OSM match:', !!(osmByKey[tbKey] && osmByKey[tbKey].length));
+    tbDbg++;
+  }
   drawnLayers = [];
   let drawn = 0;
   for (const h of tbHouses) {
