@@ -468,14 +468,15 @@ async function applyDraft(draft){
   });
   state.zoneComments = draft.zoneComments || {};
   state.manager = draft.manager || '';
-  if(draft.manager){
-    document.getElementById('mgr-select').value = draft.manager;
-  }
   if(draft.jk?.projectId){
     state.projectId = String(draft.jk.projectId);
     state.jkName = draft.jk.jkName || '';
     document.getElementById('jk-select').value = state.projectId;
     await loadHouses(state.projectId);
+    await loadManagers(state.projectId);
+    if(draft.manager){
+      document.getElementById('mgr-select').value = draft.manager;
+    }
     state.selectedHouses = {};
     (draft.houses || []).forEach(h => {
       state.selectedHouses[h.idx] = {
@@ -1091,21 +1092,26 @@ function fillProjects(list){
   });
 }
 
-async function loadManagers(){
+async function loadManagers(projectId){
+  const sel=document.getElementById('mgr-select');
+  if(!projectId){
+    sel.innerHTML='<option value="">— сначала выберите ЖК —</option>';
+    state.manager='';
+    return;
+  }
+  sel.innerHTML='<option value="">Загрузка…</option>';
   try{
-    let list=[];
-    try {
-      const data=await fetchJSON(PROXY+'?action=managers');
-      list=data.managers||[];
-    } catch (_) {
-      const data=await fetchJSON(PROXY+'?action=users');
-      list=(data.data||[]).map(u=>({id:u.id,name:u.name||u.full_name||(''+u.id)}));
-    }
-    cacheSet('managers', list);
+    const data=await fetchJSON(PROXY+'?action=managers&project='+encodeURIComponent(projectId));
+    const list=data.managers||[];
+    cacheSet('managers_'+projectId, list);
     fillManagers(list);
   }catch(e){
-    const cached=cacheGet('managers');
+    const cached=cacheGet('managers_'+projectId);
     if(cached) fillManagers(cached);
+    else {
+      sel.innerHTML='<option value="">— ошибка загрузки —</option>';
+      toast('Не удалось загрузить менеджеров');
+    }
   }
 }
 
@@ -1221,7 +1227,13 @@ document.getElementById('jk-select').onchange=function(){
   state.projectId=this.value;
   state.jkName=opt?opt.textContent:'';
   state.selectedHouses={};
-  if(this.value) loadHouses(this.value);
+  if(this.value){
+    loadHouses(this.value);
+    loadManagers(this.value);
+  } else {
+    document.getElementById('houses-list').innerHTML='<p style="font-size:13px;color:var(--text2)">Выберите ЖК</p>';
+    loadManagers('');
+  }
   saveDraft();
 };
 document.getElementById('mgr-select').onchange=function(){
@@ -1247,7 +1259,8 @@ if('serviceWorker' in navigator){
 (async function boot(){
   initItems();
   renderZones();
-  await Promise.all([loadProjects(), loadManagers(), loadZoneTeams()]);
+  await Promise.all([loadProjects(), loadZoneTeams()]);
+  document.getElementById('mgr-select').innerHTML='<option value="">— сначала выберите ЖК —</option>';
   setupDraftBanner();
   const existing = loadDraftRaw();
   if(draftHasContent(existing)) updateDraftIndicator(existing.savedAt);

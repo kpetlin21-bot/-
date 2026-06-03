@@ -210,6 +210,34 @@ function get_yard_map(array $allLocs): array {
     return $map;
 }
 
+/** Пользователь привязан к проекту (поле projects — массив id). */
+function tb_user_in_project(array $u, int $projectId): bool {
+    foreach ($u['projects'] ?? [] as $p) {
+        if (is_array($p)) {
+            if ((int)($p['id'] ?? 0) === $projectId) {
+                return true;
+            }
+        } elseif ((int)$p === $projectId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function tb_user_display_name(array $u): string {
+    $profile = $u['profile'] ?? [];
+    $first = trim($profile['first_name'] ?? $u['first_name'] ?? '');
+    $last  = trim($profile['last_name'] ?? $u['last_name'] ?? '');
+    $name  = trim($first . ' ' . $last);
+    if ($name === '') {
+        $name = trim($u['name'] ?? $u['username'] ?? '');
+    }
+    if ($name === '') {
+        $name = 'Пользователь #' . ($u['id'] ?? '?');
+    }
+    return $name;
+}
+
 $action = $_GET['action'] ?? 'help';
 $tz_msk = new DateTimeZone('Europe/Moscow');
 $today  = (new DateTime('now', $tz_msk))->format('Y-m-d');
@@ -279,6 +307,56 @@ switch ($action) {
         echo json_encode([
             'total'   => count($active),
             'users'   => array_values($active),
+        ], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ----------------------------------------------------------
+    //  Менеджеры чек-листа по проекту
+    //  ?action=managers&project=1
+    //  TB: GET /v1/users?project={id} (фильтр по projects[] на стороне proxy)
+    // ----------------------------------------------------------
+    case 'managers':
+        $projectId = (int)($_GET['project'] ?? 0);
+        if ($projectId <= 0) {
+            http_response_code(400);
+            echo json_encode([
+                'error'    => 'Параметр project обязателен',
+                'managers' => [],
+            ], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+
+        $data = tb_get('/users', ['project' => $projectId]);
+        if (isset($data['error']) && !isset($data['data'])) {
+            echo json_encode([
+                'error'    => $data['error'],
+                'managers' => [],
+            ], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+
+        $managerRoles = ['manager', 'admin', 'owner', 'supervisor'];
+        $managers = [];
+        foreach ($data['data'] ?? [] as $u) {
+            if (($u['state'] ?? '') !== 'enabled') {
+                continue;
+            }
+            if (!in_array($u['role'] ?? '', $managerRoles, true)) {
+                continue;
+            }
+            if (!tb_user_in_project($u, $projectId)) {
+                continue;
+            }
+            $managers[] = [
+                'id'   => (int)($u['id'] ?? 0),
+                'name' => tb_user_display_name($u),
+            ];
+        }
+        usort($managers, static fn ($a, $b) => strcmp($a['name'], $b['name']));
+        echo json_encode([
+            'project'  => $projectId,
+            'total'    => count($managers),
+            'managers' => $managers,
         ], JSON_UNESCAPED_UNICODE);
         break;
 
@@ -1026,6 +1104,7 @@ switch ($action) {
                 '?action=shifts&date=2026-05-28'=> 'Смены за дату',
                 '?action=tasks&date=today'      => 'Задачи: выполнено / пропущено',
                 '?action=users'                 => 'Список активных сотрудников',
+                '?action=managers&project=1'    => 'Менеджеры чек-листа по project_id',
             ]
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
