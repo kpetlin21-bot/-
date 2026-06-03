@@ -94,6 +94,7 @@ const TB_PROJECT_ID = {{PROJECT_ID}};
 const PROXY = (qs) => 'https://api.cleansyst.ru/proxy.php?project=' + TB_PROJECT_ID + '&' + (qs || '').replace(/^\?/, '');
 const OVERPASS_BBOX = '{{BBOX}}';
 const OVERPASS_QUERY = '[out:json][timeout:25];way[building](' + OVERPASS_BBOX + ');out body;>;out skel qt;';
+const MAP_SLUG = '{{SLUG}}';
 const OVERPASS_HIGHWAYS_QUERY = '[out:json][timeout:25];way[highway~"footway|path|service|residential"](' + OVERPASS_BBOX + ');out body;>;out skel qt;';
 
 const STYLES = {
@@ -299,6 +300,42 @@ async function fetchOverpass() {
   return fetchOverpassQuery(OVERPASS_QUERY);
 }
 
+
+function renderRoads(rdData) {
+  drawHighways(parseOverpassHighways(rdData));
+}
+
+function renderBuildings(bldData) {
+  drawBuildings(parseOverpass(bldData));
+}
+
+async function loadBuildingsFromOverpass() {
+  setStatus('⏳ Здания OSM (Overpass)…');
+  const osm = await fetchOverpass();
+  setStatus('⏳ Дороги (Overpass)…');
+  const hwData = await fetchOverpassQuery(OVERPASS_HIGHWAYS_QUERY);
+  renderRoads(hwData);
+  renderBuildings(osm);
+}
+
+async function loadBuildings() {
+  try {
+    const [bldResp, rdResp] = await Promise.all([
+      fetch('/data/buildings/' + MAP_SLUG + '-buildings.json'),
+      fetch('/data/buildings/' + MAP_SLUG + '-roads.json')
+    ]);
+    if (bldResp.ok && rdResp.ok) {
+      const bld = await bldResp.json();
+      const rd = await rdResp.json();
+      renderRoads(rd);
+      renderBuildings(bld);
+      return;
+    }
+  } catch (e) {}
+  console.warn('Кеш недоступен, запрос к Overpass...');
+  await loadBuildingsFromOverpass();
+}
+
 async function fetchHouseBreakdown() {
   const date = mskToday();
   const r = await fetch(PROXY('action=house_breakdown&date=' + encodeURIComponent(date)));
@@ -406,14 +443,8 @@ async function init() {
     setStatus('⏳ Данные ThroneBaron…');
     const breakdown = await fetchHouseBreakdown();
     indexHouses(breakdown);
-    setStatus('⏳ Здания OSM…');
-    const osm = await fetchOverpass();
-    const polys = parseOverpass(osm);
-    setStatus('⏳ Дороги и тропинки…');
-    const hwData = await fetchOverpassQuery(OVERPASS_HIGHWAYS_QUERY);
-    drawHighways(parseOverpassHighways(hwData));
-    setStatus('⏳ Отрисовка…');
-    drawBuildings(polys);
+    setStatus('⏳ Карта OSM…');
+    await loadBuildings();
     document.getElementById('status').style.display = 'none';
     if (drawnLayers.length > 0) {
       const group = L.featureGroup(drawnLayers);
