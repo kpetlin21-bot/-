@@ -51,6 +51,26 @@ function warm_cache_label_from_url(string $url): string
 
 function warm_cache_run(): void
 {
+    $lock = fopen('/tmp/warm_cache.lock', 'c');
+    if ($lock === false) {
+        fwrite(STDERR, date('c') . " не удалось открыть /tmp/warm_cache.lock\n");
+        exit(1);
+    }
+    if (!flock($lock, LOCK_EX | LOCK_NB)) {
+        echo date('c') . " предыдущий прогрев ещё идёт — пропускаю\n";
+        exit(0);
+    }
+
+    try {
+        warm_cache_run_locked();
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function warm_cache_run_locked(): void
+{
     require_once __DIR__ . '/cache.php';
 
     $tz    = new DateTimeZone('Europe/Moscow');
