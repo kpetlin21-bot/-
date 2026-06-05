@@ -21,11 +21,13 @@ echo "=== Deploying to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH ==="
 scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
   "$DIR/index.html" \
   "$DIR/proxy.php" \
+  "$DIR/cache.php" \
+  "$DIR/warm_cache.php" \
   "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
 
 echo ""
 echo "=== Deploy complete! ==="
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
-  "ls -lh ${REMOTE_PATH}index.html ${REMOTE_PATH}proxy.php"
+  "mkdir -p ${REMOTE_PATH}cache && chmod 0775 ${REMOTE_PATH}cache && ls -lh ${REMOTE_PATH}index.html ${REMOTE_PATH}proxy.php ${REMOTE_PATH}cache.php ${REMOTE_PATH}warm_cache.php"
 echo "Dashboard: https://api.cleansyst.ru/index.html"
 echo "Proxy:     https://api.cleansyst.ru/proxy.php?action=help"
