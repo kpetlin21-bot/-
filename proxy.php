@@ -817,7 +817,7 @@ switch ($action) {
         if ($days > 60) {
             $days = 60;
         }
-        $cacheKey = 'history_' . $days;
+        $cacheKey = bd_key('history', (string)$days);
         proxy_serve_cached($cache, $cacheKey, static function () use ($days) {
             return tb_history($days);
         });
@@ -908,9 +908,10 @@ switch ($action) {
         set_time_limit(300);
         $allowFallback = !isset($_GET['date']);
         $reqDate = $_GET['date'] ?? $today;
-        $cacheKey = $allowFallback
-            ? 'dashboard_auto'
-            : 'dashboard_' . normalize_report_date($reqDate, $tz_msk, $today);
+        $cacheDate = $allowFallback
+            ? null
+            : normalize_report_date($reqDate, $tz_msk, $today);
+        $cacheKey = bd_key('dashboard', $cacheDate);
         proxy_serve_cached($cache, $cacheKey, static function () use ($reqDate, $allowFallback) {
             return tb_dashboard($reqDate, $allowFallback);
         });
@@ -924,7 +925,7 @@ switch ($action) {
         $rawDate = $_GET['date'] ?? $today;
         $isRange = (strpos($rawDate, ',') !== false);
         $date    = $isRange ? $rawDate : normalize_report_date($rawDate, $tz_msk, $today);
-        $cacheKey = 'house_breakdown_' . $date;
+        $cacheKey = bd_key('house_breakdown', $date);
         proxy_serve_cached($cache, $cacheKey, static function () use ($rawDate) {
             return tb_house_breakdown($rawDate);
         });

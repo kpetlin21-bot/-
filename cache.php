@@ -1,6 +1,21 @@
 <?php
 declare(strict_types=1);
 
+/** Канонический ключ кэша: action_auto или action_YYYY-MM-DD[_YYYY-MM-DD…] */
+function bd_key(string $action, ?string $date): string
+{
+    if ($date === null || $date === '') {
+        return $action . '_auto';
+    }
+    $parts = preg_split('/\s*,\s*/', trim($date));
+    $norm  = [];
+    foreach ($parts as $p) {
+        $d = DateTime::createFromFormat('Y-m-d', trim($p));
+        $norm[] = $d ? $d->format('Y-m-d') : trim($p);
+    }
+    return $action . '_' . implode('_', $norm);
+}
+
 /**
  * Файловый кэш ответов proxy (без TTL — отдаём последний прогретый срез).
  */

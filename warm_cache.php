@@ -39,22 +39,20 @@ function warm_cache_label_from_url(string $url): string
     $q = [];
     parse_str((string)(parse_url($url, PHP_URL_QUERY) ?? ''), $q);
     $action = (string)($q['action'] ?? '?');
-    $date   = (string)($q['date'] ?? '');
-    $days   = (string)($q['days'] ?? '');
-    if ($action === 'dashboard' && $date === '') {
-        return 'dashboard_auto';
+    if ($action === 'history') {
+        return bd_key('history', isset($q['days']) ? (string)$q['days'] : null);
     }
-    if ($date !== '') {
-        return $action . '_' . str_replace(',', '_', $date);
+    $date = isset($q['date']) ? (string)$q['date'] : null;
+    if ($date === '') {
+        $date = null;
     }
-    if ($days !== '') {
-        return $action . '_' . $days . 'd';
-    }
-    return $action;
+    return bd_key($action, $date);
 }
 
 function warm_cache_run(): void
 {
+    require_once __DIR__ . '/cache.php';
+
     $tz    = new DateTimeZone('Europe/Moscow');
     $now   = new DateTime('now', $tz);
     $today = $now->format('Y-m-d');
