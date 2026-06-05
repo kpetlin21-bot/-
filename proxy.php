@@ -312,7 +312,13 @@ function count_location_tasks(string $date, int $locId, string $status): int
     if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $m)) {
         $http = (int)$m[1];
     }
-    return count_location_tasks_compute($body !== false ? $body : '', $http, $body === false ? 'fetch failed' : '');
+    $ok = $body !== false && $http === 200;
+    return count_location_tasks_compute(
+        $body !== false ? $body : '',
+        $http,
+        $body === false ? 'fetch failed' : '',
+        $ok
+    );
 }
 
 /** done/missed из списка задач (как location_period_counts). */
@@ -789,6 +795,13 @@ function tb_house_breakdown(string $rawDate): array
 
     $countResp = [];
     $tasksByLoc = [];
+    $tbConc = (int)(getenv('TB_MULTI_CONCURRENCY') ?: 10);
+    if ($tbConc < 1) {
+        $tbConc = 1;
+    }
+    if ($tbConc > 10) {
+        $tbConc = 10;
+    }
 
     if ($isRange) {
         // Фаза 2 (период): параллельная пагинация по уникальным локациям
@@ -805,7 +818,7 @@ function tb_house_breakdown(string $rawDate): array
                 $locIdByKey['loc:' . $hr['yardId']] = (int)$hr['yardId'];
             }
         }
-        $fetchResult = tb_fetch_tasks_multi_location($date, $locIdByKey, 10);
+        $fetchResult = tb_fetch_tasks_multi_location($date, $locIdByKey, $tbConc);
         $tasksByLoc  = $fetchResult['tasks'];
     } else {
         // Фаза 2 (день): все count_location_tasks URL разом
@@ -828,7 +841,7 @@ function tb_house_breakdown(string $rawDate): array
             }
         }
         if ($urls) {
-            $countResp = tb_multi_get($urls, tb_auth_headers(), 10, 30);
+            $countResp = tb_multi_get($urls, tb_auth_headers(), $tbConc, 30);
         }
     }
 
@@ -951,6 +964,10 @@ function tb_house_breakdown(string $rawDate): array
         'houses'      => $houses,
         'cached'      => false,
     ];
+}
+
+if (defined('TB_PROXY_CLI_FUNCTIONS_ONLY')) {
+    return;
 }
 
 switch ($action) {

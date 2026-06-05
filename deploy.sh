@@ -23,6 +23,7 @@ scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeou
   "$DIR/proxy.php" \
   "$DIR/cache.php" \
   "$DIR/warm_cache.php" \
+  "$DIR/tb_multi.php" \
   "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
 
 echo ""

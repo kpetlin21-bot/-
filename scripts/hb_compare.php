@@ -15,9 +15,12 @@ $now = new DateTime('now', $tz);
 $yesterday = (clone $now)->modify('-1 day')->format('Y-m-d');
 $today = $now->format('Y-m-d');
 
-$monday = (clone $now);
-$monday->modify('-' . ((int)$monday->format('N') - 1) . ' day');
-$weekRange = $monday->format('Y-m-d') . ',' . $today;
+// Закрытая неделя: полный пн–вс до текущей (не «пн…сегодня» как в getDateParam('7'))
+$mondayThisWeek = (clone $now);
+$mondayThisWeek->modify('-' . ((int)$mondayThisWeek->format('N') - 1) . ' day');
+$lastSunday = (clone $mondayThisWeek)->modify('-1 day');
+$lastMonday = (clone $lastSunday)->modify('-6 days');
+$weekRange = $lastMonday->format('Y-m-d') . ',' . $lastSunday->format('Y-m-d');
 
 /** Эталон — код до параллелизации (без tb_multi в house_breakdown). */
 const HB_LEGACY_COMMIT = 'e879ecd';
@@ -55,10 +58,18 @@ function hb_run_isolated(string $commit, string $rawDate): array
 function hb_run_current(string $label, string $rawDate): array
 {
     global $root;
+    $_SERVER['REQUEST_METHOD'] = 'GET';
+    if (!defined('TB_PROXY_CLI_FUNCTIONS_ONLY')) {
+        define('TB_PROXY_CLI_FUNCTIONS_ONLY', true);
+    }
     require_once $root . '/cache.php';
     require_once $root . '/warm_cache.php';
     require_once $root . '/tb_multi.php';
     require_once $root . '/proxy.php';
+
+    $tz = new DateTimeZone('Europe/Moscow');
+    $GLOBALS['tz_msk'] = $tz;
+    $GLOBALS['today']  = (new DateTime('now', $tz))->format('Y-m-d');
 
     $t0 = microtime(true);
     $data = tb_house_breakdown($rawDate);
@@ -115,7 +126,7 @@ $compare = in_array('--compare', $argv, true);
 
 if ($saveBaseline) {
     echo "Legacy commit: " . HB_LEGACY_COMMIT . "\n";
-    echo "Single-day case uses yesterday ({$yesterday}), not today\n\n";
+    echo "Single-day: yesterday ({$yesterday}); week (closed): {$weekRange}\n\n";
     foreach ($cases as $name => $raw) {
         $t0 = microtime(true);
         $data = hb_run_isolated(HB_LEGACY_COMMIT, $raw);
@@ -129,7 +140,7 @@ if ($saveBaseline) {
 }
 
 if ($saveNew) {
-    echo "Single-day case uses yesterday ({$yesterday}), not today\n\n";
+    echo "Single-day: yesterday ({$yesterday}); week (closed): {$weekRange}\n\n";
     foreach ($cases as $name => $raw) {
         $data = hb_run_current('new ' . $name, $raw);
         $path = $outDir . '/new_' . $name . '.json';

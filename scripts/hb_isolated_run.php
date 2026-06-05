@@ -14,6 +14,9 @@ $commit  = $argv[1];
 $rawDate = $argv[2];
 $root    = dirname(__DIR__);
 
+$_SERVER['REQUEST_METHOD'] = 'GET';
+define('TB_PROXY_CLI_FUNCTIONS_ONLY', true);
+
 if (!preg_match('/^[a-f0-9]{7,40}$/i', $commit)) {
     fwrite(STDERR, "Invalid commit\n");
     exit(2);
@@ -29,6 +32,18 @@ if ($exported === null || $exported === '') {
 
 if (!is_file($backup) && !copy($proxyPath, $backup)) {
     fwrite(STDERR, "backup proxy.php failed\n");
+    exit(1);
+}
+
+$exported = preg_replace(
+    '/\nswitch\s*\(\s*\$action\s*\)\s*\{/',
+    "\nif (defined('TB_PROXY_CLI_FUNCTIONS_ONLY')) {\n    return;\n}\nswitch (\$action) {",
+    $exported,
+    1,
+    $count
+);
+if ($count !== 1) {
+    fwrite(STDERR, "inject CLI guard before switch failed\n");
     exit(1);
 }
 
