@@ -21,6 +21,7 @@ echo "=== Deploying to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH ==="
 scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
   "$DIR/index.html" \
   "$DIR/proxy.php" \
+  "$DIR/diag.php" \
   "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
 
 echo ""
