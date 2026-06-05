@@ -34,38 +34,73 @@ function warm_cache_http_get(string $url, int $timeoutSec): array
     return ['status' => $status, 'body' => $body !== false ? $body : ''];
 }
 
+function warm_cache_label_from_url(string $url): string
+{
+    $q = [];
+    parse_str((string)(parse_url($url, PHP_URL_QUERY) ?? ''), $q);
+    $action = (string)($q['action'] ?? '?');
+    $date   = (string)($q['date'] ?? '');
+    $days   = (string)($q['days'] ?? '');
+    if ($action === 'dashboard' && $date === '') {
+        return 'dashboard_auto';
+    }
+    if ($date !== '') {
+        return $action . '_' . str_replace(',', '_', $date);
+    }
+    if ($days !== '') {
+        return $action . '_' . $days . 'd';
+    }
+    return $action;
+}
+
 function warm_cache_run(): void
 {
     $tz    = new DateTimeZone('Europe/Moscow');
-    $today = (new DateTime('now', $tz))->format('Y-m-d');
-    $base  = rtrim(getenv('PROXY_BASE_URL') ?: 'https://api.cleansyst.ru/proxy.php', '?');
-    $sec   = rawurlencode(WARM_SECRET);
+    $now   = new DateTime('now', $tz);
+    $today = $now->format('Y-m-d');
 
-    $jobs = [
-        ['label' => 'dashboard_today', 'query' => "action=dashboard&date=" . rawurlencode($today) . "&_warm={$sec}", 'timeout' => 300],
-        ['label' => 'history_30', 'query' => "action=history&days=30&_warm={$sec}", 'timeout' => 300],
-        ['label' => 'house_breakdown_today', 'query' => "action=house_breakdown&date=" . rawurlencode($today) . "&_warm={$sec}", 'timeout' => 600],
+    $BASE = rtrim(getenv('PROXY_BASE_URL') ?: 'https://api.cleansyst.ru/proxy.php', '?');
+    $WARM_SECRET = rawurlencode(WARM_SECRET);
+
+    // Диапазоны как в index.html getDateParam (неделя / месяц)
+    $monday = (clone $now);
+    $monday->modify('-' . ((int)$monday->format('N') - 1) . ' day');
+    $weekRange = $monday->format('Y-m-d') . ',' . $today;
+
+    $firstOfMonth = (clone $now)->modify('first day of this month')->format('Y-m-d');
+    $monthRange = $firstOfMonth . ',' . $today;
+
+    $targets = [
+        "{$BASE}?action=dashboard&date={$today}&_warm={$WARM_SECRET}",
+        "{$BASE}?action=dashboard&_warm={$WARM_SECRET}",            // dashboard_auto
+        "{$BASE}?action=history&days=30&_warm={$WARM_SECRET}",
+        // "{$BASE}?action=history&days=7&_warm={$WARM_SECRET}",     // если появится в UI
+        "{$BASE}?action=house_breakdown&date={$today}&_warm={$WARM_SECRET}",
+        "{$BASE}?action=house_breakdown&date=" . rawurlencode($weekRange) . "&_warm={$WARM_SECRET}",
+        "{$BASE}?action=house_breakdown&date=" . rawurlencode($monthRange) . "&_warm={$WARM_SECRET}",
     ];
 
     $report = [];
-    foreach ($jobs as $job) {
-        $t0   = microtime(true);
-        $url  = $base . (strpos($base, '?') !== false ? '&' : '?') . $job['query'];
-        $res  = warm_cache_http_get($url, $job['timeout']);
-        $ms   = round((microtime(true) - $t0) * 1000);
-        $ok   = $res['status'] === 200;
-        $json = $ok ? json_decode($res['body'], true) : null;
+    foreach ($targets as $url) {
+        $label   = warm_cache_label_from_url($url);
+        $timeout = (strpos($url, 'house_breakdown') !== false) ? 600 : 300;
+        $t0      = microtime(true);
+        $res     = warm_cache_http_get($url, $timeout);
+        $ms      = round((microtime(true) - $t0) * 1000);
+        $ok      = $res['status'] === 200;
+        $json    = $ok ? json_decode($res['body'], true) : null;
+        $success = $ok && is_array($json) && !empty($json['ok']);
         $report[] = [
-            'label'  => $job['label'],
+            'label'  => $label,
             'status' => $res['status'],
-            'ok'     => $ok && is_array($json) && !empty($json['ok']),
+            'ok'     => $success,
             'ms'     => $ms,
         ];
         fwrite(STDOUT, sprintf(
             "%s HTTP %d %s %d ms\n",
-            $job['label'],
+            $label,
             $res['status'],
-            ($ok && is_array($json) && !empty($json['ok'])) ? 'OK' : 'FAIL',
+            $success ? 'OK' : 'FAIL',
             $ms
         ));
     }
