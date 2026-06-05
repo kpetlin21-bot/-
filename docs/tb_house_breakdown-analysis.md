@@ -240,29 +240,27 @@ flowchart TB
 
 ---
 
-## 9. Проверка эквивалентности (обязательно перед коммитом)
+## 9. Проверка эквивалентности (обязательно перед merge)
 
-Скрипт: `scripts/hb_compare.php`.
+Скрипт: `scripts/hb_compare.php` (+ `scripts/hb_isolated_run.php` для legacy из git).
 
 ```bash
-# Эталон (код до рефактора) — из git или stash
-php scripts/hb_compare.php --save-baseline
-
-# Новая версия
-php scripts/hb_compare.php --save-new
-
-# Сравнение
+php scripts/hb_compare.php --save-baseline   # commit e879ecd (до параллели)
+php scripts/hb_compare.php --save-new        # текущий proxy.php
 php scripts/hb_compare.php --compare
 ```
 
 Кейсы:
 
-- **today** — `tb_house_breakdown($today)` (MSK).
-- **week** — диапазон понедельник…сегодня, как `getDateParam('7')` в `index.html`.
+- **yesterday** — один день (MSK), **не сегодня** (утром задач может не быть → ложные нули).
+- **week** — диапазон понедельник…сегодня, как `getDateParam('7')`.
 
-Логировать `microtime` до/после для today и month.
+Критерий: JSON идентичен — иначе не merge.
 
-Критерий: JSON **побайтово идентичен** (или идентичен по полям домов) — иначе не коммитить.
+### Блокеры перед merge
+
+1. **Ретрай/бэкофф** — `tb_http_get_with_retry()` / `tb_multi_get()`: до 6 попыток, `sleep(1+2n)` при JSON без `data`, `usleep` при обрыве; неуспех после ретраев → `ok:false`, не «тихий ноль».
+2. **Сверка на вчера** — см. `yesterday` в `hb_compare.php`.
 
 ---
 
@@ -270,8 +268,8 @@ php scripts/hb_compare.php --compare
 
 1. **limit=250 на день** — `count_location_tasks` считает только первую страницу; оптимизация B сохраняет ту же семантику.
 2. **Rate limit ThroneBaron** — concurrency строго **10**.
-3. **Период без usleep между страницами** в `tb_fetch_tasks_multi_location` — быстрее, но возможны 429; при расхождении эталона проверить throttling.
-4. **Нет PHP в CI агента** — сравнение только на сервере/локально с `php-cli` + `php-curl`.
+3. **Период** — `tb_fetch_tasks_multi_location` помечает `complete:false` при сбое страницы после ретраев; между волнами пагинации `usleep(120ms)`.
+4. **Сравнение** — только на сервере/локально: `php-cli` + `php-curl`.
 
 ---
 

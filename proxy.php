@@ -9,6 +9,7 @@ define('TB_BASE_URL', 'https://api.thronebaron.com/v1');
 
 require_once __DIR__ . '/cache.php';
 require_once __DIR__ . '/warm_cache.php';
+require_once __DIR__ . '/tb_multi.php';
 $cache = new Cache();
 
 // CORS — разрешаем запросы с любого домена (Netlify, Платрум и др.)
@@ -264,16 +265,155 @@ function pdt_stats_for_yard_period(?int $yardId, string $dateRange): array {
     return ['done' => $c['done'], 'missed' => $c['missed']];
 }
 
-/** Задачи по локации (поддерево location=id*) */
-function count_location_tasks(string $date, int $locId, string $status): int {
-    $r = tb_get('/reports/tasks', [
+/** Заголовки авторизации ThroneBaron (как в tb_get). */
+function tb_auth_headers(): array
+{
+    return [
+        'Authorization: Api-Key ' . TB_API_KEY,
+        'Accept: application/json',
+    ];
+}
+
+/** URL отчёта задач по локации (первая страница, как count_location_tasks). */
+function count_location_tasks_url(string $date, int $locId, string $status): string
+{
+    return TB_BASE_URL . '/reports/tasks?' . http_build_query([
         'date'     => $date,
         'project'  => TB_PROJECT,
         'status'   => $status,
         'location' => $locId . '*',
         'limit'    => 250,
     ]);
-    return count($r['data'] ?? []);
+}
+
+/** Подсчёт задач из ответа count_location_tasks (после ретраев tb_multi_get). */
+function count_location_tasks_compute(string $body, int $http, string $err, bool $ok = true): int
+{
+    if (!$ok || $http !== 200 || $err !== '') {
+        error_log('count_location_tasks: ok=' . ($ok ? '1' : '0') . ' http=' . $http . ' err=' . $err);
+        return 0;
+    }
+    $r = json_decode($body, true);
+    return is_array($r) ? count($r['data'] ?? []) : 0;
+}
+
+/** Задачи по локации (поддерево location=id*) — один запрос, первая страница. */
+function count_location_tasks(string $date, int $locId, string $status): int
+{
+    $url = count_location_tasks_url($date, $locId, $status);
+    $ctx = stream_context_create(['http' => [
+        'method'        => 'GET',
+        'header'        => implode("\r\n", tb_auth_headers()),
+        'timeout'       => 15,
+        'ignore_errors' => true,
+    ]]);
+    $body = @file_get_contents($url, false, $ctx);
+    $http = 0;
+    if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $m)) {
+        $http = (int)$m[1];
+    }
+    return count_location_tasks_compute($body !== false ? $body : '', $http, $body === false ? 'fetch failed' : '');
+}
+
+/** done/missed из списка задач (как location_period_counts). */
+function location_tasks_done_missed(array $tasks): array
+{
+    $done = 0;
+    $missed = 0;
+    foreach ($tasks as $t) {
+        $st = $t['status'] ?? '';
+        if ($st === 'done') {
+            $done++;
+        } elseif ($st === 'missed') {
+            $missed++;
+        }
+    }
+    return ['done' => $done, 'missed' => $missed];
+}
+
+/**
+ * Все страницы /reports/tasks для локации (параллельно, с ретраями как tb_get_all).
+ *
+ * @param array<string,int> $locIdByKey
+ * @return array{tasks: array<string,list<array>>, complete: bool}
+ */
+function tb_fetch_tasks_multi_location(string $dateRange, array $locIdByKey, int $concurrency = 10): array
+{
+    $headers = tb_auth_headers();
+    $tasksByKey = [];
+    $locComplete = [];
+    foreach ($locIdByKey as $key => $locId) {
+        $tasksByKey[$key] = [];
+        $locComplete[$key] = true;
+    }
+
+    $queue = [];
+    foreach ($locIdByKey as $key => $locId) {
+        $queue[$key . ':p0'] = [
+            'loc_key' => $key,
+            'url'     => TB_BASE_URL . '/reports/tasks?' . http_build_query([
+                'date'     => $dateRange,
+                'project'  => TB_PROJECT,
+                'location' => $locId . '*',
+                'limit'    => 250,
+            ]),
+        ];
+    }
+
+    $pageNum = 0;
+    while ($queue) {
+        $urlMap = [];
+        $locKeyByQueue = [];
+        foreach ($queue as $qkey => $item) {
+            $urlMap[$qkey] = $item['url'];
+            $locKeyByQueue[$qkey] = $item['loc_key'];
+        }
+        $queue = [];
+
+        $resp = tb_multi_get($urlMap, $headers, $concurrency, 30);
+        foreach ($resp as $qkey => $r) {
+            $locKey = $locKeyByQueue[$qkey] ?? $qkey;
+            $ok    = !empty($r['ok']);
+            $http  = (int)($r['http'] ?? 0);
+            $err   = (string)($r['err'] ?? '');
+
+            if (!$ok) {
+                error_log("tb_fetch_tasks_multi_location: {$qkey} failed after retries http={$http} err={$err}");
+                $locComplete[$locKey] = false;
+                continue;
+            }
+
+            $json = json_decode($r['body'] ?? '', true);
+            if (!is_array($json) || !array_key_exists('data', $json)) {
+                error_log("tb_fetch_tasks_multi_location: {$qkey} missing data key");
+                $locComplete[$locKey] = false;
+                continue;
+            }
+
+            $tasksByKey[$locKey] = array_merge($tasksByKey[$locKey], $json['data'] ?? []);
+            $next = $json['next_page_url'] ?? null;
+            if ($next) {
+                $pageNum++;
+                $queue[$qkey . ':p' . $pageNum] = [
+                    'loc_key' => $locKey,
+                    'url'     => $next,
+                ];
+            }
+        }
+
+        if ($queue) {
+            usleep(120000);
+        }
+    }
+
+    $allComplete = !in_array(false, $locComplete, true);
+    if (!$allComplete) {
+        error_log('tb_fetch_tasks_multi_location: incomplete locations: ' . json_encode(
+            array_keys(array_filter($locComplete, static fn ($v) => !$v))
+        ));
+    }
+
+    return ['tasks' => $tasksByKey, 'complete' => $allComplete];
 }
 
 /**
@@ -619,7 +759,8 @@ function tb_house_breakdown(string $rawDate): array
         return $l['project_id'] == TB_PROJECT && $l['parent_id'] === null;
     });
 
-    $houses = [];
+    // Фаза 1: список домов в прежнем порядке (стабильная сортировка usort ниже)
+    $houseRows = [];
     foreach ($rootLocs as $loc) {
         $locId   = $loc['id'];
         if ($terrId !== null && (int)$locId === (int)$terrId) {
@@ -632,22 +773,146 @@ function tb_house_breakdown(string $rawDate): array
         $parts   = explode(' ', trim($locName), 2);
         $houseId = count($parts) > 1 ? $parts[1] : $locName;
 
+        $sections = array_values(array_filter($allLocs, static function ($l) use ($locId) {
+            return (int)$l['parent_id'] === (int)$locId;
+        }));
+        $sectionIds = array_map(static fn ($s) => (int)$s['id'], $sections);
+
+        $houseRows[] = [
+            'locId'      => (int)$locId,
+            'houseId'    => $houseId,
+            'locName'    => $locName,
+            'yardId'     => $yardMap[$houseId] ?? null,
+            'sectionIds' => $sectionIds,
+        ];
+    }
+
+    $countResp = [];
+    $tasksByLoc = [];
+
+    if ($isRange) {
+        // Фаза 2 (период): параллельная пагинация по уникальным локациям
+        $locIdByKey = [];
+        foreach ($houseRows as $hr) {
+            if ($hr['sectionIds']) {
+                foreach ($hr['sectionIds'] as $sid) {
+                    $locIdByKey['loc:' . $sid] = $sid;
+                }
+            } else {
+                $locIdByKey['loc:' . $hr['locId']] = $hr['locId'];
+            }
+            if ($hr['yardId'] !== null) {
+                $locIdByKey['loc:' . $hr['yardId']] = (int)$hr['yardId'];
+            }
+        }
+        $fetchResult = tb_fetch_tasks_multi_location($date, $locIdByKey, 10);
+        $tasksByLoc  = $fetchResult['tasks'];
+    } else {
+        // Фаза 2 (день): все count_location_tasks URL разом
+        $urls = [];
+        foreach ($houseRows as $hr) {
+            if ($hr['sectionIds']) {
+                foreach ($hr['sectionIds'] as $sid) {
+                    $urls["mop:{$sid}:done"]   = count_location_tasks_url($date, $sid, 'done');
+                    $urls["mop:{$sid}:missed"] = count_location_tasks_url($date, $sid, 'missed');
+                }
+            } else {
+                $lid = $hr['locId'];
+                $urls["mop:{$lid}:done"]   = count_location_tasks_url($date, $lid, 'done');
+                $urls["mop:{$lid}:missed"] = count_location_tasks_url($date, $lid, 'missed');
+            }
+            if ($hr['yardId'] !== null) {
+                $yid = (int)$hr['yardId'];
+                $urls["pdt:{$yid}:done"]   = count_location_tasks_url($date, $yid, 'done');
+                $urls["pdt:{$yid}:missed"] = count_location_tasks_url($date, $yid, 'missed');
+            }
+        }
+        if ($urls) {
+            $countResp = tb_multi_get($urls, tb_auth_headers(), 10, 30);
+        }
+    }
+
+    // Фаза 3: арифметика и сборка houses (тот же порядок домов)
+    $houses = [];
+    foreach ($houseRows as $hr) {
+        $mopDone = 0;
+        $mopMiss = 0;
+        $pdtDone = 0;
+        $pdtMiss = 0;
+        $yardId  = $hr['yardId'];
+
         if ($isRange) {
-            $mop     = mop_stats_for_house_period((int)$locId, $date, $allLocs);
-            $mopDone = $mop['done'];
-            $mopMiss = $mop['missed'];
-            $yardId  = $yardMap[$houseId] ?? null;
-            $pdt     = pdt_stats_for_yard_period($yardId !== null ? (int)$yardId : null, $date);
-            $pdtDone = $pdt['done'];
-            $pdtMiss = $pdt['missed'];
+            if ($hr['sectionIds']) {
+                foreach ($hr['sectionIds'] as $sid) {
+                    $tasks = $tasksByLoc['loc:' . $sid] ?? [];
+                    $c = location_tasks_done_missed($tasks);
+                    $mopDone += $c['done'];
+                    $mopMiss += $c['missed'];
+                }
+            } else {
+                $tasks = $tasksByLoc['loc:' . $hr['locId']] ?? [];
+                $c = location_tasks_done_missed($tasks);
+                $mopDone = $c['done'];
+                $mopMiss = $c['missed'];
+            }
+            if ($yardId !== null) {
+                $tasks = $tasksByLoc['loc:' . (int)$yardId] ?? [];
+                $c = location_tasks_done_missed($tasks);
+                $pdtDone = $c['done'];
+                $pdtMiss = $c['missed'];
+            }
         } else {
-            $mop     = mop_stats_for_house((int)$locId, $date, $allLocs);
-            $mopDone = $mop['done'];
-            $mopMiss = $mop['missed'];
-            $yardId  = $yardMap[$houseId] ?? null;
-            $pdt     = pdt_stats_for_yard($yardId !== null ? (int)$yardId : null, $date);
-            $pdtDone = $pdt['done'];
-            $pdtMiss = $pdt['missed'];
+            if ($hr['sectionIds']) {
+                foreach ($hr['sectionIds'] as $sid) {
+                    $rDone = $countResp["mop:{$sid}:done"] ?? ['http' => 0, 'body' => '', 'err' => 'missing'];
+                    $rMiss = $countResp["mop:{$sid}:missed"] ?? ['http' => 0, 'body' => '', 'err' => 'missing'];
+                    $mopDone += count_location_tasks_compute(
+                        $rDone['body'],
+                        (int)$rDone['http'],
+                        (string)$rDone['err'],
+                        !empty($rDone['ok'])
+                    );
+                    $mopMiss += count_location_tasks_compute(
+                        $rMiss['body'],
+                        (int)$rMiss['http'],
+                        (string)$rMiss['err'],
+                        !empty($rMiss['ok'])
+                    );
+                }
+            } else {
+                $lid = $hr['locId'];
+                $rDone = $countResp["mop:{$lid}:done"] ?? ['http' => 0, 'body' => '', 'err' => 'missing'];
+                $rMiss = $countResp["mop:{$lid}:missed"] ?? ['http' => 0, 'body' => '', 'err' => 'missing'];
+                $mopDone = count_location_tasks_compute(
+                    $rDone['body'],
+                    (int)$rDone['http'],
+                    (string)$rDone['err'],
+                    !empty($rDone['ok'])
+                );
+                $mopMiss = count_location_tasks_compute(
+                    $rMiss['body'],
+                    (int)$rMiss['http'],
+                    (string)$rMiss['err'],
+                    !empty($rMiss['ok'])
+                );
+            }
+            if ($yardId !== null) {
+                $yid = (int)$yardId;
+                $rDone = $countResp["pdt:{$yid}:done"] ?? ['http' => 0, 'body' => '', 'err' => 'missing'];
+                $rMiss = $countResp["pdt:{$yid}:missed"] ?? ['http' => 0, 'body' => '', 'err' => 'missing'];
+                $pdtDone = count_location_tasks_compute(
+                    $rDone['body'],
+                    (int)$rDone['http'],
+                    (string)$rDone['err'],
+                    !empty($rDone['ok'])
+                );
+                $pdtMiss = count_location_tasks_compute(
+                    $rMiss['body'],
+                    (int)$rMiss['http'],
+                    (string)$rMiss['err'],
+                    !empty($rMiss['ok'])
+                );
+            }
         }
 
         $dc = $mopDone + $pdtDone;
@@ -659,7 +924,7 @@ function tb_house_breakdown(string $rawDate): array
         $mopTot = $mopDone + $mopMiss;
         $pdtTot = $pdtDone + $pdtMiss;
         $houses[] = [
-            'id' => $houseId, 'label' => $locName, 'locationId' => $locId,
+            'id' => $hr['houseId'], 'label' => $hr['locName'], 'locationId' => $hr['locId'],
             'done' => $dc, 'missed' => $mc, 'total' => $total, 'pct' => $rate, 'status' => $status,
             'mop' => [
                 'done' => $mopDone, 'missed' => $mopMiss, 'total' => $mopTot,
