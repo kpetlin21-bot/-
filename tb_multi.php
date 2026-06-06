@@ -1,6 +1,25 @@
 <?php
 declare(strict_types=1);
 
+/** Сбросить счётчик 429 (перед sweep / отдельным прогоном). */
+function tb_rate_limit_reset(): void
+{
+    $GLOBALS['_tb_rate_limit_hits'] = 0;
+}
+
+/** Число зафиксированных http=429 в ретрай-пути с последнего reset. */
+function tb_rate_limit_hits(): int
+{
+    return (int)($GLOBALS['_tb_rate_limit_hits'] ?? 0);
+}
+
+function tb_rate_limit_record(int $http): void
+{
+    if ($http === 429) {
+        $GLOBALS['_tb_rate_limit_hits'] = tb_rate_limit_hits() + 1;
+    }
+}
+
 /**
  * Один GET с ретраями (как tb_get_all): 429/обрыв не считаем успехом, если нужен ключ data.
  *
@@ -27,6 +46,8 @@ function tb_http_get_with_retry(
         $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err  = curl_error($ch);
         curl_close($ch);
+
+        tb_rate_limit_record($http);
 
         $bodyStr = $body !== false ? $body : '';
         $last = [
@@ -148,6 +169,8 @@ function tb_multi_get(array $urls, array $headers, int $concurrency = 10, int $t
             }
             curl_multi_remove_handle($mh, $ch);
             curl_close($ch);
+
+            tb_rate_limit_record($attemptResult['http']);
 
             if ($attemptResult['ok']) {
                 $results[$key] = $attemptResult;

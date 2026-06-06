@@ -2,38 +2,31 @@
 declare(strict_types=1);
 
 /**
- * Сравнение legacy (e879ecd) и нового tb_house_breakdown.
+ * Валидация tb_house_breakdown.
  *
- * php scripts/hb_compare.php --save-baseline   # legacy, вчера + неделя
- * php scripts/hb_compare.php --save-new        # текущий код
- * php scripts/hb_compare.php --compare
+ * php scripts/hb_compare.php --save-baseline-week   # legacy e879ecd, только закрытая неделя
+ * php scripts/hb_compare.php --compare               # self-consistency день + неделя vs baseline
+ *
+ * Exit: 0 = green/merge | 1 = real diff/investigate | 2 = throttled/rerun
  */
 $root = dirname(__DIR__);
 
 $tz = new DateTimeZone('Europe/Moscow');
 $now = new DateTime('now', $tz);
 $yesterday = (clone $now)->modify('-1 day')->format('Y-m-d');
-$today = $now->format('Y-m-d');
 
-// Закрытая неделя: полный пн–вс до текущей (не «пн…сегодня» как в getDateParam('7'))
 $mondayThisWeek = (clone $now);
 $mondayThisWeek->modify('-' . ((int)$mondayThisWeek->format('N') - 1) . ' day');
 $lastSunday = (clone $mondayThisWeek)->modify('-1 day');
 $lastMonday = (clone $lastSunday)->modify('-6 days');
 $weekRange = $lastMonday->format('Y-m-d') . ',' . $lastSunday->format('Y-m-d');
 
-/** Эталон — код до параллелизации (без tb_multi в house_breakdown). */
 const HB_LEGACY_COMMIT = 'e879ecd';
 
 $outDir = $root . '/scripts/hb_baseline';
 if (!is_dir($outDir)) {
     mkdir($outDir, 0775, true);
 }
-
-$cases = [
-    'yesterday' => $yesterday,
-    'week'      => $weekRange,
-];
 
 function hb_run_isolated(string $commit, string $rawDate): array
 {
@@ -50,18 +43,21 @@ function hb_run_isolated(string $commit, string $rawDate): array
     }
     $data = json_decode($json, true);
     if (!is_array($data)) {
-        throw new RuntimeException("invalid JSON from isolated run: " . substr($json, 0, 200));
+        throw new RuntimeException('invalid JSON from isolated run: ' . substr((string)$json, 0, 200));
     }
     return $data;
 }
 
-function hb_run_current(string $label, string $rawDate): array
+function hb_run_current(string $label, string $rawDate, int $conc): array
 {
     global $root;
     $_SERVER['REQUEST_METHOD'] = 'GET';
     if (!defined('TB_PROXY_CLI_FUNCTIONS_ONLY')) {
         define('TB_PROXY_CLI_FUNCTIONS_ONLY', true);
     }
+
+    putenv('TB_MULTI_CONCURRENCY=' . $conc);
+
     require_once $root . '/cache.php';
     require_once $root . '/warm_cache.php';
     require_once $root . '/tb_multi.php';
@@ -74,103 +70,206 @@ function hb_run_current(string $label, string $rawDate): array
     $t0 = microtime(true);
     $data = tb_house_breakdown($rawDate);
     $ms = round((microtime(true) - $t0) * 1000);
-    fwrite(STDOUT, sprintf("%s [%s] wall-time: %d ms\n", $label, $rawDate, $ms));
+    $locInc = (int)($data['locIncomplete'] ?? 0);
+    $partial = !empty($data['partial']);
+    fwrite(STDOUT, sprintf(
+        "%s [%s] conc=%d wall-time: %d ms partial=%s locIncomplete=%d\n",
+        $label,
+        $rawDate,
+        $conc,
+        $ms,
+        $partial ? 'true' : 'false',
+        $locInc
+    ));
+
     return $data;
 }
 
-function hb_diff_summary(array $a, array $b): string
+/** Сравнение только по полям домов (без partial/locIncomplete/cached). */
+function hb_houses_only(array $data): array
 {
-    if ($a === $b) {
+    return $data['houses'] ?? [];
+}
+
+function hb_diff_houses(array $a, array $b): string
+{
+    $ha = hb_houses_only($a);
+    $hb = hb_houses_only($b);
+    if ($ha === $hb) {
         return 'IDENTICAL';
     }
     $lines = ['DIFF'];
-    if (($a['houses'] ?? null) !== ($b['houses'] ?? null)) {
-        $lines[] = '  houses array differs';
-        $ha = $a['houses'] ?? [];
-        $hb = $b['houses'] ?? [];
-        $idsA = array_column($ha, 'id');
-        $idsB = array_column($hb, 'id');
-        $onlyA = array_diff($idsA, $idsB);
-        $onlyB = array_diff($idsB, $idsA);
-        if ($onlyA) {
-            $lines[] = '  only baseline ids: ' . implode(', ', $onlyA);
-        }
-        if ($onlyB) {
-            $lines[] = '  only new ids: ' . implode(', ', $onlyB);
-        }
-        foreach ($ha as $i => $rowA) {
-            $id = $rowA['id'] ?? $i;
-            $rowB = null;
-            foreach ($hb as $rb) {
-                if (($rb['id'] ?? '') === $id) {
-                    $rowB = $rb;
-                    break;
-                }
-            }
-            if ($rowB !== null && $rowA !== $rowB) {
-                $lines[] = "  house {$id}: baseline done={$rowA['done']} new done={$rowB['done']}";
-            }
-        }
+    $idsA = array_column($ha, 'id');
+    $idsB = array_column($hb, 'id');
+    $onlyA = array_diff($idsA, $idsB);
+    $onlyB = array_diff($idsB, $idsA);
+    if ($onlyA) {
+        $lines[] = '  only A ids: ' . implode(', ', $onlyA);
     }
-    foreach (['date', 'dateFrom', 'dateTo', 'periodRange'] as $k) {
-        if (($a[$k] ?? null) !== ($b[$k] ?? null)) {
-            $lines[] = "  {$k}: " . json_encode($a[$k] ?? null) . ' vs ' . json_encode($b[$k] ?? null);
+    if ($onlyB) {
+        $lines[] = '  only B ids: ' . implode(', ', $onlyB);
+    }
+    foreach ($ha as $i => $rowA) {
+        $id = $rowA['id'] ?? $i;
+        $rowB = null;
+        foreach ($hb as $rb) {
+            if (($rb['id'] ?? '') === $id) {
+                $rowB = $rb;
+                break;
+            }
+        }
+        if ($rowB !== null && $rowA !== $rowB) {
+            $lines[] = "  house {$id}: A done={$rowA['done']} B done={$rowB['done']}";
         }
     }
     return implode("\n", $lines);
 }
 
-$saveBaseline = in_array('--save-baseline', $argv, true);
-$saveNew = in_array('--save-new', $argv, true);
-$compare = in_array('--compare', $argv, true);
-
-if ($saveBaseline) {
-    echo "Legacy commit: " . HB_LEGACY_COMMIT . "\n";
-    echo "Single-day: yesterday ({$yesterday}); week (closed): {$weekRange}\n\n";
-    foreach ($cases as $name => $raw) {
-        $t0 = microtime(true);
-        $data = hb_run_isolated(HB_LEGACY_COMMIT, $raw);
-        $ms = round((microtime(true) - $t0) * 1000);
-        fwrite(STDOUT, sprintf("baseline %s wall-time: %d ms\n", $name, $ms));
-        $path = $outDir . '/baseline_' . $name . '.json';
-        file_put_contents($path, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        echo "saved {$path}\n";
+function hb_diff_full(array $a, array $b): string
+{
+    if ($a === $b) {
+        return 'IDENTICAL';
     }
-    exit(0);
+    $houseCmp = hb_diff_houses($a, $b);
+    if ($houseCmp === 'IDENTICAL') {
+        return 'DIFF (meta only)';
+    }
+    return $houseCmp;
 }
 
-if ($saveNew) {
-    echo "Single-day: yesterday ({$yesterday}); week (closed): {$weekRange}\n\n";
-    foreach ($cases as $name => $raw) {
-        $data = hb_run_current('new ' . $name, $raw);
-        $path = $outDir . '/new_' . $name . '.json';
-        file_put_contents($path, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        echo "saved {$path}\n";
+function hb_is_partial(array $data): bool
+{
+    return !empty($data['partial']);
+}
+
+/** @param array<int,array> $liveRuns */
+function hb_loc_incomplete_total(array $liveRuns): int
+{
+    $n = 0;
+    foreach ($liveRuns as $r) {
+        $n += (int)($r['locIncomplete'] ?? 0);
     }
+    return $n;
+}
+
+/**
+ * Вердикт кейса: partial у любого live-участника → INCONCLUSIVE (не DIFF/IDENTICAL).
+ *
+ * @param array<int,array> $liveRuns прогоны с locIncomplete (baseline без partial = complete)
+ */
+function hb_case_verdict(string $housesDiff, bool $anyPartial, array $liveRuns): string
+{
+    if ($anyPartial) {
+        return 'INCONCLUSIVE (locIncomplete=' . hb_loc_incomplete_total($liveRuns)
+            . ', throttled, rerun)';
+    }
+    return $housesDiff === 'IDENTICAL' ? 'IDENTICAL' : 'DIFF';
+}
+
+function hb_single_run_verdict(array $data): string
+{
+    if (hb_is_partial($data)) {
+        return 'INCONCLUSIVE (locIncomplete=' . (int)($data['locIncomplete'] ?? 0)
+            . ', throttled, rerun)';
+    }
+    return 'IDENTICAL';
+}
+
+function hb_verdict_bucket(string $verdict): string
+{
+    if (str_starts_with($verdict, 'INCONCLUSIVE')) {
+        return 'INCONCLUSIVE';
+    }
+    return $verdict;
+}
+
+$saveBaselineWeek = in_array('--save-baseline-week', $argv, true);
+$compare = in_array('--compare', $argv, true);
+
+if ($saveBaselineWeek) {
+    echo "Legacy week baseline commit: " . HB_LEGACY_COMMIT . "\n";
+    echo "Closed week: {$weekRange}\n\n";
+    $t0 = microtime(true);
+    $data = hb_run_isolated(HB_LEGACY_COMMIT, $weekRange);
+    $ms = round((microtime(true) - $t0) * 1000);
+    fwrite(STDOUT, "baseline week wall-time: {$ms} ms\n");
+    $path = $outDir . '/baseline_week.json';
+    file_put_contents($path, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    echo "saved {$path}\n";
     exit(0);
 }
 
 if ($compare) {
-    $ok = true;
-    foreach (array_keys($cases) as $name) {
-        $basePath = $outDir . '/baseline_' . $name . '.json';
-        $newPath  = $outDir . '/new_' . $name . '.json';
-        if (!is_file($basePath) || !is_file($newPath)) {
-            echo "{$name}: missing files (run --save-baseline and --save-new)\n";
-            $ok = false;
-            continue;
+    $hasDiff = false;
+    $hasInconclusive = false;
+
+    echo "=== yesterday self-consistency (conc=1 vs conc=10) ===\n";
+    echo "date: {$yesterday}\n\n";
+
+    $d1 = hb_run_current('yesterday conc=1', $yesterday, 1);
+    sleep(5);
+    $d10 = hb_run_current('yesterday conc=10', $yesterday, 10);
+
+    $yCmp = hb_diff_houses($d1, $d10);
+    $yPartial = hb_is_partial($d1) || hb_is_partial($d10);
+    $yVerdict = hb_case_verdict($yCmp, $yPartial, [$d1, $d10]);
+    echo "yesterday: {$yVerdict}\n";
+    if (hb_verdict_bucket($yVerdict) === 'DIFF') {
+        echo $yCmp . "\n";
+    }
+    if (hb_verdict_bucket($yVerdict) === 'DIFF') {
+        $hasDiff = true;
+    } elseif (hb_verdict_bucket($yVerdict) === 'INCONCLUSIVE') {
+        $hasInconclusive = true;
+    }
+
+    echo "\n=== closed week vs legacy baseline ===\n";
+    echo "range: {$weekRange}\n\n";
+
+    $basePath = $outDir . '/baseline_week.json';
+    if (!is_file($basePath)) {
+        echo "week: DIFF (missing {$basePath}, run --save-baseline-week)\n";
+        $hasDiff = true;
+    } else {
+        sleep(5);
+        $weekNew = hb_run_current('week default conc=4', $weekRange, 4);
+        $baseline = json_decode(file_get_contents($basePath), true);
+        $wCmp = hb_diff_houses($baseline, $weekNew);
+        $wPartial = hb_is_partial($weekNew);
+        $wVerdict = hb_case_verdict($wCmp, $wPartial, [$weekNew]);
+        echo "week: {$wVerdict}\n";
+        if (hb_verdict_bucket($wVerdict) === 'DIFF') {
+            echo $wCmp . "\n";
         }
-        $a = json_decode(file_get_contents($basePath), true);
-        $b = json_decode(file_get_contents($newPath), true);
-        echo "{$name}: " . hb_diff_summary($a, $b) . "\n";
-        if ($a !== $b) {
-            $ok = false;
+        if (hb_verdict_bucket($wVerdict) === 'DIFF') {
+            $hasDiff = true;
+        } elseif (hb_verdict_bucket($wVerdict) === 'INCONCLUSIVE') {
+            $hasInconclusive = true;
         }
     }
-    exit($ok ? 0 : 1);
+
+    echo "\n=== warm-day check (complete, default conc=4) ===\n";
+    sleep(5);
+    $warmDay = hb_run_current('warm-day', $yesterday, 4);
+    $warmVerdict = hb_single_run_verdict($warmDay);
+    echo "warm-day: {$warmVerdict}\n";
+    if (hb_verdict_bucket($warmVerdict) === 'DIFF') {
+        $hasDiff = true;
+    } elseif (hb_verdict_bucket($warmVerdict) === 'INCONCLUSIVE') {
+        $hasInconclusive = true;
+    }
+
+    echo "\nexit 0 = green/merge | 1 = real diff/investigate | 2 = throttled/rerun\n";
+
+    if ($hasDiff) {
+        exit(1);
+    }
+    if ($hasInconclusive) {
+        exit(2);
+    }
+    exit(0);
 }
 
 echo "Usage:\n";
-echo "  php scripts/hb_compare.php --save-baseline\n";
-echo "  php scripts/hb_compare.php --save-new\n";
+echo "  php scripts/hb_compare.php --save-baseline-week\n";
 echo "  php scripts/hb_compare.php --compare\n";

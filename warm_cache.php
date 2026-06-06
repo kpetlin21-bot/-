@@ -99,7 +99,10 @@ function warm_cache_run_locked(): void
     ];
 
     $report = [];
-    foreach ($targets as $url) {
+    foreach ($targets as $i => $url) {
+        if ($i > 0) {
+            sleep(3);
+        }
         $label   = warm_cache_label_from_url($url);
         $timeout = (strpos($url, 'house_breakdown') !== false) ? 600 : 300;
         $t0      = microtime(true);
