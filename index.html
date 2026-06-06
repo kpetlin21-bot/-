@@ -234,6 +234,30 @@ function fetchWithTimeout(url, ms, options){
   return fetch(url, {...options, signal: ctrl.signal}).finally(()=>clearTimeout(t));
 }
 
+// proxy.php отдаёт 202 + {warming:true}, пока кэш пуст — опрашиваем до готовности
+async function fetchProxyJson(url, ms, opts){
+  opts=opts||{};
+  const maxAttempts=opts.warmRetries??60;
+  const pauseMs=opts.warmPauseMs??3000;
+  for(let attempt=0; attempt<maxAttempts; attempt++){
+    const r=await fetchWithTimeout(url, ms);
+    if(r.status===202){
+      if(attempt===0) setStatus('Прогрев данных…');
+      await new Promise(res=>setTimeout(res, pauseMs));
+      continue;
+    }
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    if(d && d.warming===true){
+      if(attempt===0) setStatus('Прогрев данных…');
+      await new Promise(res=>setTimeout(res, pauseMs));
+      continue;
+    }
+    return d;
+  }
+  throw new Error('Данные ещё прогреваются — обновите страницу через минуту');
+}
+
 // Возвращает параметр date для API
 function getDateParam(p){
   const now=new Date();
@@ -712,9 +736,7 @@ async function loadPeriod(p){
 
   try{
     const action = (p==='today'||p==='yesterday') ? 'dashboard' : 'period_tasks';
-    const r=await fetch(PROXY+'?action='+action+'&date='+dateParam);
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
+    const d=await fetchProxyJson(PROXY+'?action='+action+'&date='+encodeURIComponent(dateParam), 120000);
 
     // Для dashboard дополнительно обновляем смены и «в работе»
     if(action==='dashboard'){
@@ -777,9 +799,11 @@ async function loadHouseBreakdown(){
       document.getElementById('house-detail').innerHTML=
         '<div style="color:var(--text-3);font-size:13px;">⏳ Загрузка статистики по домам…</div>';
     }
-    const r=await fetchWithTimeout(PROXY+'?action=house_breakdown&date='+encodeURIComponent(dateParam), timeoutMs);
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
+    const d=await fetchProxyJson(
+      PROXY+'?action=house_breakdown&date='+encodeURIComponent(dateParam),
+      timeoutMs,
+      {warmRetries:isPeriodRangeMode()?120:60, warmPauseMs:3000}
+    );
     if(d.houses && d.houses.length){
       houseToday = d.houses.map(h=>({
         id: h.id,
@@ -823,9 +847,7 @@ async function loadHouseBreakdown(){
 // Загружаем историю по дням через прокси (proxy.php?action=history), параллельно с loadToday
 async function loadHistory(){
   try{
-    const r=await fetchWithTimeout(PROXY+'?action=history&days=30', 120000);
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
+    const d=await fetchProxyJson(PROXY+'?action=history&days=30', 120000);
     if(d.history && d.history.length){
       history=d.history;
       setStatus('История ('+d.history.length+' дн.)');

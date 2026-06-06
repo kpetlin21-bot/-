@@ -7,14 +7,21 @@ define('TB_API_KEY',  'de4oWlnBgj8|IumZlKGCOaIrlAI36RFdcHi4BwDMsU2SpiX9pzXy0aadc
 define('TB_PROJECT',  2);
 define('TB_BASE_URL', 'https://api.thronebaron.com/v1');
 
+require_once __DIR__ . '/cache.php';
+require_once __DIR__ . '/warm_cache.php';
+require_once __DIR__ . '/tb_multi.php';
+$cache = new Cache();
+
 // CORS — разрешаем запросы с любого домена (Netlify, Платрум и др.)
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, apikey');
-header('Content-Type: application/json; charset=utf-8');
+if (!defined('TB_PROXY_CLI_FUNCTIONS_ONLY')) {
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, apikey');
+    header('Content-Type: application/json; charset=utf-8');
+}
 
 // Preflight OPTIONS запрос от браузера — отвечаем 200 и выходим
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (!defined('TB_PROXY_CLI_FUNCTIONS_ONLY') && ($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
@@ -260,16 +267,161 @@ function pdt_stats_for_yard_period(?int $yardId, string $dateRange): array {
     return ['done' => $c['done'], 'missed' => $c['missed']];
 }
 
-/** Задачи по локации (поддерево location=id*) */
-function count_location_tasks(string $date, int $locId, string $status): int {
-    $r = tb_get('/reports/tasks', [
+/** Заголовки авторизации ThroneBaron (как в tb_get). */
+function tb_auth_headers(): array
+{
+    return [
+        'Authorization: Api-Key ' . TB_API_KEY,
+        'Accept: application/json',
+    ];
+}
+
+/** URL отчёта задач по локации (первая страница, как count_location_tasks). */
+function count_location_tasks_url(string $date, int $locId, string $status): string
+{
+    return TB_BASE_URL . '/reports/tasks?' . http_build_query([
         'date'     => $date,
         'project'  => TB_PROJECT,
         'status'   => $status,
         'location' => $locId . '*',
         'limit'    => 250,
     ]);
-    return count($r['data'] ?? []);
+}
+
+/** Подсчёт задач из ответа count_location_tasks (после ретраев tb_multi_get). */
+function count_location_tasks_compute(string $body, int $http, string $err, bool $ok = true): int
+{
+    if (!$ok || $http !== 200 || $err !== '') {
+        error_log('count_location_tasks: ok=' . ($ok ? '1' : '0') . ' http=' . $http . ' err=' . $err);
+        return 0;
+    }
+    $r = json_decode($body, true);
+    return is_array($r) ? count($r['data'] ?? []) : 0;
+}
+
+/** Задачи по локации (поддерево location=id*) — один запрос, первая страница. */
+function count_location_tasks(string $date, int $locId, string $status): int
+{
+    $url = count_location_tasks_url($date, $locId, $status);
+    $ctx = stream_context_create(['http' => [
+        'method'        => 'GET',
+        'header'        => implode("\r\n", tb_auth_headers()),
+        'timeout'       => 15,
+        'ignore_errors' => true,
+    ]]);
+    $body = @file_get_contents($url, false, $ctx);
+    $http = 0;
+    if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $m)) {
+        $http = (int)$m[1];
+    }
+    $ok = $body !== false && $http === 200;
+    return count_location_tasks_compute(
+        $body !== false ? $body : '',
+        $http,
+        $body === false ? 'fetch failed' : '',
+        $ok
+    );
+}
+
+/** done/missed из списка задач (как location_period_counts). */
+function location_tasks_done_missed(array $tasks): array
+{
+    $done = 0;
+    $missed = 0;
+    foreach ($tasks as $t) {
+        $st = $t['status'] ?? '';
+        if ($st === 'done') {
+            $done++;
+        } elseif ($st === 'missed') {
+            $missed++;
+        }
+    }
+    return ['done' => $done, 'missed' => $missed];
+}
+
+/**
+ * Все страницы /reports/tasks для локации (параллельно, с ретраями как tb_get_all).
+ *
+ * @param array<string,int> $locIdByKey
+ * @return array{tasks: array<string,list<array>>, complete: bool, locComplete: array<string,bool>}
+ */
+function tb_fetch_tasks_multi_location(string $dateRange, array $locIdByKey, int $concurrency = 4): array
+{
+    $headers = tb_auth_headers();
+    $tasksByKey = [];
+    $locComplete = [];
+    foreach ($locIdByKey as $key => $locId) {
+        $tasksByKey[$key] = [];
+        $locComplete[$key] = true;
+    }
+
+    $queue = [];
+    foreach ($locIdByKey as $key => $locId) {
+        $queue[$key . ':p0'] = [
+            'loc_key' => $key,
+            'url'     => TB_BASE_URL . '/reports/tasks?' . http_build_query([
+                'date'     => $dateRange,
+                'project'  => TB_PROJECT,
+                'location' => $locId . '*',
+                'limit'    => 250,
+            ]),
+        ];
+    }
+
+    $pageNum = 0;
+    while ($queue) {
+        $urlMap = [];
+        $locKeyByQueue = [];
+        foreach ($queue as $qkey => $item) {
+            $urlMap[$qkey] = $item['url'];
+            $locKeyByQueue[$qkey] = $item['loc_key'];
+        }
+        $queue = [];
+
+        $resp = tb_multi_get($urlMap, $headers, $concurrency, 30);
+        foreach ($resp as $qkey => $r) {
+            $locKey = $locKeyByQueue[$qkey] ?? $qkey;
+            $ok    = !empty($r['ok']);
+            $http  = (int)($r['http'] ?? 0);
+            $err   = (string)($r['err'] ?? '');
+
+            if (!$ok) {
+                error_log("tb_fetch_tasks_multi_location: {$qkey} failed after retries http={$http} err={$err}");
+                $locComplete[$locKey] = false;
+                continue;
+            }
+
+            $json = json_decode($r['body'] ?? '', true);
+            if (!is_array($json) || !array_key_exists('data', $json)) {
+                error_log("tb_fetch_tasks_multi_location: {$qkey} missing data key");
+                $locComplete[$locKey] = false;
+                continue;
+            }
+
+            $tasksByKey[$locKey] = array_merge($tasksByKey[$locKey], $json['data'] ?? []);
+            $next = $json['next_page_url'] ?? null;
+            if ($next) {
+                $pageNum++;
+                $queue[$qkey . ':p' . $pageNum] = [
+                    'loc_key' => $locKey,
+                    'url'     => $next,
+                ];
+            }
+        }
+
+        if ($queue) {
+            usleep(120000);
+        }
+    }
+
+    $allComplete = !in_array(false, $locComplete, true);
+    if (!$allComplete) {
+        error_log('tb_fetch_tasks_multi_location: incomplete locations: ' . json_encode(
+            array_keys(array_filter($locComplete, static fn ($v) => !$v))
+        ));
+    }
+
+    return ['tasks' => $tasksByKey, 'complete' => $allComplete, 'locComplete' => $locComplete];
 }
 
 /**
@@ -416,6 +568,355 @@ function location_tasks_bundle(int $locId, string $date): array {
     ];
 }
 
+/**
+ * Отдать кэш или прогреть (_warm=WARM_SECRET). Обычный запрос никогда не считает $compute.
+ */
+function proxy_serve_cached(Cache $cache, string $cacheKey, callable $compute): void
+{
+    $warm = (string)($_GET['_warm'] ?? '');
+    if ($warm !== '' && hash_equals(WARM_SECRET, $warm)) {
+        set_time_limit(600);
+        $data = $compute();
+        $partial = !empty($data['partial']);
+        if ($partial) {
+            $locIncomplete = (int)($data['locIncomplete'] ?? 0);
+            $existing = $cache->get($cacheKey);
+            if ($existing !== null) {
+                error_log(sprintf(
+                    'proxy_serve_cached warm: incomplete (%d locs), keeping last-good cache key=%s',
+                    $locIncomplete,
+                    $cacheKey
+                ));
+                echo json_encode(['ok' => true, 'kept' => true, 'partial' => true], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            error_log(sprintf(
+                'proxy_serve_cached warm: incomplete (%d locs), no prior cache — writing partial key=%s',
+                $locIncomplete,
+                $cacheKey
+            ));
+        }
+        $cache->put($cacheKey, $data);
+        echo json_encode(['ok' => true, 'partial' => $partial], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+
+    $entry = $cache->get($cacheKey);
+    if ($entry === null) {
+        http_response_code(202);
+        echo json_encode(['warming' => true], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+
+    $payload = $entry['data'];
+    $payload['_cache_age_sec'] = $entry['age_sec'];
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+}
+
+/** KPI дашборда за дату (тяжёлый вызов ThroneBaron). */
+function tb_dashboard(string $reqDate, bool $allowYesterdayFallback): array
+{
+    $tz  = new DateTimeZone('Europe/Moscow');
+    $date = normalize_report_date($reqDate, $tz, $GLOBALS['today']);
+
+    $complete  = true;
+    $allTasks  = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT], $complete);
+
+    $isYesterday = false;
+    if (empty($allTasks) && $allowYesterdayFallback) {
+        $yesterday = (new DateTime('now', $tz))->modify('-1 day')->format('Y-m-d');
+        $allTasks  = tb_get_all('/reports/tasks', ['date' => $yesterday, 'project' => TB_PROJECT], $complete);
+        $date      = $yesterday;
+        $isYesterday = true;
+    }
+
+    $totalCnt      = count($allTasks);
+    $doneCnt       = 0;
+    $inProgressCnt = 0;
+    $missedCnt     = 0;
+    $availableCnt  = 0;
+    $pendingCnt    = 0;
+    foreach ($allTasks as $t) {
+        $st = $t['status'] ?? '';
+        if      ($st === 'done')        $doneCnt++;
+        elseif  ($st === 'in_progress') $inProgressCnt++;
+        elseif  ($st === 'missed')      $missedCnt++;
+        elseif  ($st === 'available')   $availableCnt++;
+        elseif  ($st === 'pending')     $pendingCnt++;
+    }
+    $rate = $totalCnt > 0 ? round($doneCnt / $totalCnt * 100) : 0;
+
+    $hourlyHours = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
+    $hourlyData  = [];
+    foreach ($hourlyHours as $hh) {
+        $hourlyData[$hh] = 0;
+    }
+    $doneNoTime = 0;
+    foreach ($allTasks as $t) {
+        if (($t['status'] ?? '') !== 'done') {
+            continue;
+        }
+        $dt = msk_dt($t['started_at'] ?? null);
+        if ($dt === null) {
+            $doneNoTime++;
+            continue;
+        }
+        if ($dt->format('Y-m-d') !== $date) {
+            $doneNoTime++;
+            continue;
+        }
+        $h = (int)$dt->format('H');
+        $bucket = $h - ($h % 2);
+        $hourlyData[$bucket]++;
+    }
+
+    $shifts     = tb_get('/work-shifts', ['filter[date]' => $date, 'filter[project]' => TB_PROJECT]);
+    $shiftsData = $shifts['data'] ?? [];
+    $staffTotal = count($shiftsData);
+    $came = 0;
+    $shiftsFormatted = [];
+    foreach ($shiftsData as $s) {
+        $hasStarted = !empty($s['started_at']);
+        if ($hasStarted) {
+            $came++;
+        }
+        $inDt    = msk_dt($s['started_at'] ?? null);
+        $outDt   = msk_dt($s['ended_at'] ?? null);
+        $inTime  = $inDt  ? $inDt->format('H:i')  : null;
+        $outTime = $outDt ? $outDt->format('H:i') : null;
+        $profile  = $s['user']['profile'] ?? [];
+        $fullName = trim(($profile['last_name'] ?? '') . ' ' . ($profile['first_name'] ?? ''));
+        $pos      = strtolower($profile['position'] ?? '');
+        if (strpos($pos, 'двор') !== false) {
+            $role = 'Дворник';
+        } elseif (strpos($pos, 'убор') !== false) {
+            $role = 'Уборщица';
+        } elseif (strpos($pos, 'клин') !== false) {
+            $role = 'Клинер';
+        } else {
+            $role = $profile['position'] ?? '—';
+        }
+        $shiftsFormatted[] = [
+            'name' => $fullName ?: ($profile['first_name'] ?? '—'),
+            'role' => $role,
+            'in'   => $inTime,
+            'out'  => $outTime,
+            'came' => $hasStarted,
+        ];
+    }
+
+    return [
+        'date'        => $date,
+        'isYesterday' => $isYesterday,
+        'tasks'       => [
+            'total'         => $totalCnt,
+            'done'          => $doneCnt,
+            'in_progress'   => $inProgressCnt,
+            'missed'        => $missedCnt,
+            'available'     => $availableCnt,
+            'pending'       => $pendingCnt,
+            'rate'          => $rate,
+            'hourly'        => array_values($hourlyData),
+            'hourly_hours'  => $hourlyHours,
+            'hourly_notime' => $doneNoTime,
+        ],
+        'staff'  => ['total' => $staffTotal, 'came' => $came, 'absent' => $staffTotal - $came],
+        'shifts' => $shiftsFormatted,
+    ];
+}
+
+/** История выполнения по дням. */
+function tb_history(int $days): array
+{
+    set_time_limit(180);
+    $tz       = new DateTimeZone('Europe/Moscow');
+    $now      = new DateTime('now', $tz);
+    $todayStr = $now->format('Y-m-d');
+    if ($days < 1) {
+        $days = 30;
+    }
+    if ($days > 60) {
+        $days = 60;
+    }
+
+    $out = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $d = (clone $now)->modify("-{$i} day")->format('Y-m-d');
+        $complete = true;
+        $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => TB_PROJECT], $complete);
+        $tot = count($tasks);
+        $dn = 0;
+        $ms = 0;
+        foreach ($tasks as $t) {
+            $st = $t['status'] ?? '';
+            if ($st === 'done') {
+                $dn++;
+            } elseif ($st === 'missed') {
+                $ms++;
+            }
+        }
+        $rec = [
+            'date'   => $d,
+            'tasks'  => $tot,
+            'closed' => $dn,
+            'missed' => $ms,
+            'rate'   => $tot > 0 ? round($dn / $tot * 100) : 0,
+        ];
+        if ($tot > 0) {
+            $out[] = $rec;
+        }
+    }
+
+    return ['days' => $days, 'history' => $out];
+}
+
+/** Детализация по домам (МОП + ПДТ) — самый тяжёлый запрос. */
+function tb_house_breakdown(string $rawDate): array
+{
+    global $today, $tz_msk;
+
+    $isRange = (strpos($rawDate, ',') !== false);
+    $date    = $isRange ? $rawDate : normalize_report_date($rawDate, $tz_msk, $today);
+    set_time_limit($isRange ? 600 : 300);
+
+    $allLocs  = get_all_locations();
+    $yardMap  = get_yard_map($allLocs);
+    $terrId   = $yardMap['_terr'] ?? null;
+    $rootLocs = array_filter($allLocs, static function ($l) {
+        return $l['project_id'] == TB_PROJECT && $l['parent_id'] === null;
+    });
+
+    // Фаза 1: список домов в прежнем порядке (стабильная сортировка usort ниже)
+    $houseRows = [];
+    foreach ($rootLocs as $loc) {
+        $locId   = $loc['id'];
+        if ($terrId !== null && (int)$locId === (int)$terrId) {
+            continue;
+        }
+        $locName = $loc['name'];
+        if (strpos($locName, 'Офис') !== false) {
+            continue;
+        }
+        $parts   = explode(' ', trim($locName), 2);
+        $houseId = count($parts) > 1 ? $parts[1] : $locName;
+
+        $sections = array_values(array_filter($allLocs, static function ($l) use ($locId) {
+            return (int)$l['parent_id'] === (int)$locId;
+        }));
+        $sectionIds = array_map(static fn ($s) => (int)$s['id'], $sections);
+
+        $houseRows[] = [
+            'locId'      => (int)$locId,
+            'houseId'    => $houseId,
+            'locName'    => $locName,
+            'yardId'     => $yardMap[$houseId] ?? null,
+            'sectionIds' => $sectionIds,
+        ];
+    }
+
+    // Фаза 2: день и период — одна пагинация по локациям (день = вырожденный диапазон date)
+    $locIdByKey = [];
+    foreach ($houseRows as $hr) {
+        if ($hr['sectionIds']) {
+            foreach ($hr['sectionIds'] as $sid) {
+                $locIdByKey['loc:' . $sid] = $sid;
+            }
+        } else {
+            $locIdByKey['loc:' . $hr['locId']] = $hr['locId'];
+        }
+        if ($hr['yardId'] !== null) {
+            $locIdByKey['loc:' . $hr['yardId']] = (int)$hr['yardId'];
+        }
+    }
+
+    // Дефолт 4 — прогнать свип TB_MULTI_CONCURRENCY=2,3,4,6,10 и выбрать max без 429 в логе
+    $tbConc = (int)(getenv('TB_MULTI_CONCURRENCY') ?: 4);
+    if ($tbConc < 1) {
+        $tbConc = 1;
+    }
+    if ($tbConc > 10) {
+        $tbConc = 10;
+    }
+
+    $fetchResult   = tb_fetch_tasks_multi_location($date, $locIdByKey, $tbConc);
+    $tasksByLoc    = $fetchResult['tasks'];
+    $complete      = $fetchResult['complete'];
+    $locComplete   = $fetchResult['locComplete'] ?? [];
+    $locIncomplete = count(array_filter($locComplete, static fn ($v) => !$v));
+
+    // Фаза 3: арифметика и сборка houses (тот же порядок домов)
+    $houses = [];
+    foreach ($houseRows as $hr) {
+        $mopDone = 0;
+        $mopMiss = 0;
+        $pdtDone = 0;
+        $pdtMiss = 0;
+        $yardId  = $hr['yardId'];
+
+        if ($hr['sectionIds']) {
+            foreach ($hr['sectionIds'] as $sid) {
+                $tasks = $tasksByLoc['loc:' . $sid] ?? [];
+                $c = location_tasks_done_missed($tasks);
+                $mopDone += $c['done'];
+                $mopMiss += $c['missed'];
+            }
+        } else {
+            $tasks = $tasksByLoc['loc:' . $hr['locId']] ?? [];
+            $c = location_tasks_done_missed($tasks);
+            $mopDone = $c['done'];
+            $mopMiss = $c['missed'];
+        }
+        if ($yardId !== null) {
+            $tasks = $tasksByLoc['loc:' . (int)$yardId] ?? [];
+            $c = location_tasks_done_missed($tasks);
+            $pdtDone = $c['done'];
+            $pdtMiss = $c['missed'];
+        }
+
+        $dc = $mopDone + $pdtDone;
+        $mc = $mopMiss + $pdtMiss;
+        $total = $dc + $mc;
+        $rate  = $total > 0 ? round($dc / $total * 100) : 100;
+        $status = traffic_status($rate, $total);
+
+        $mopTot = $mopDone + $mopMiss;
+        $pdtTot = $pdtDone + $pdtMiss;
+        $houses[] = [
+            'id' => $hr['houseId'], 'label' => $hr['locName'], 'locationId' => $hr['locId'],
+            'done' => $dc, 'missed' => $mc, 'total' => $total, 'pct' => $rate, 'status' => $status,
+            'mop' => [
+                'done' => $mopDone, 'missed' => $mopMiss, 'total' => $mopTot,
+                'pct' => $mopTot > 0 ? round($mopDone / $mopTot * 100) : 0,
+            ],
+            'pdt' => [
+                'done' => $pdtDone, 'missed' => $pdtMiss, 'total' => $pdtTot,
+                'pct' => $pdtTot > 0 ? round($pdtDone / $pdtTot * 100) : 0, 'yardId' => $yardId,
+            ],
+        ];
+    }
+
+    usort($houses, static function ($a, $b) {
+        return $a['pct'] - $b['pct'];
+    });
+    $parts = explode(',', $date);
+
+    return [
+        'date'          => $date,
+        'dateFrom'      => $parts[0] ?? $date,
+        'dateTo'        => $parts[1] ?? ($parts[0] ?? $date),
+        'periodRange'   => $isRange,
+        'periodLabel'   => $isRange ? 'сумма по дням' : null,
+        'partial'       => !$complete,
+        'locIncomplete' => $locIncomplete,
+        'houses'        => $houses,
+        'cached'        => false,
+    ];
+}
+
+if (defined('TB_PROXY_CLI_FUNCTIONS_ONLY')) {
+    return;
+}
+
 switch ($action) {
 
     // ----------------------------------------------------------
@@ -538,49 +1039,17 @@ switch ($action) {
     //  ?action=history&days=30
     // ----------------------------------------------------------
     case 'history':
-        set_time_limit(180);
-        $tz       = new DateTimeZone('Europe/Moscow');
-        $now      = new DateTime('now', $tz);
-        $todayStr = $now->format('Y-m-d');
-        $days     = (int)($_GET['days'] ?? 30);
-        if ($days < 1)  $days = 30;
-        if ($days > 60) $days = 60;
-
-        $out = [];
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $d = (clone $now)->modify("-{$i} day")->format('Y-m-d');
-            $isToday   = ($d === $todayStr);
-            $dayCache  = sys_get_temp_dir() . '/tb_day_' . TB_PROJECT . '_' . $d . '.json';
-            $ttl       = $isToday ? 900 : 86400;
-
-            $rec = null;
-            if (file_exists($dayCache) && (time() - filemtime($dayCache)) < $ttl) {
-                $rec = json_decode(file_get_contents($dayCache), true);
-            }
-            if ($rec === null) {
-                $complete = true;
-                $tasks = tb_get_all('/reports/tasks', ['date' => $d, 'project' => TB_PROJECT], $complete);
-                $tot = count($tasks); $dn = 0; $ms = 0;
-                foreach ($tasks as $t) {
-                    $st = $t['status'] ?? '';
-                    if      ($st === 'done')   $dn++;
-                    elseif  ($st === 'missed') $ms++;
-                }
-                $rec = [
-                    'date'   => $d,
-                    'tasks'  => $tot,
-                    'closed' => $dn,
-                    'missed' => $ms,
-                    'rate'   => $tot > 0 ? round($dn / $tot * 100) : 0,
-                ];
-                // Кешируем день только при полной выборке
-                if ($complete && $tot > 0) file_put_contents($dayCache, json_encode($rec));
-            }
-            // Пропускаем дни без задач (выходные/нет плана) — не засоряют график
-            if (($rec['tasks'] ?? 0) > 0) $out[] = $rec;
+        $days = (int)($_GET['days'] ?? 30);
+        if ($days < 1) {
+            $days = 30;
         }
-
-        echo json_encode(['days' => $days, 'history' => $out], JSON_UNESCAPED_UNICODE);
+        if ($days > 60) {
+            $days = 60;
+        }
+        $cacheKey = bd_key('history', (string)$days);
+        proxy_serve_cached($cache, $cacheKey, static function () use ($days) {
+            return tb_history($days);
+        });
         break;
 
     // ----------------------------------------------------------
@@ -665,115 +1134,16 @@ switch ($action) {
 
 
     case 'dashboard':
-        $tz   = new DateTimeZone('Europe/Moscow');
-        $now  = new DateTime('now', $tz);
-        $date = $_GET['date'] ?? $now->format('Y-m-d');
-
-        // Все задачи за дату без фильтра статуса — даёт точный total
-        $complete  = true;
-        $allTasks  = tb_get_all('/reports/tasks', ['date' => $date, 'project' => TB_PROJECT], $complete);
-
-        // Если сегодня ещё нет задач (утро) — берём вчера
-        $isYesterday = false;
-        if (empty($allTasks) && !isset($_GET['date'])) {
-            $yesterday = (new DateTime('now', $tz))->modify('-1 day')->format('Y-m-d');
-            $allTasks  = tb_get_all('/reports/tasks', ['date' => $yesterday, 'project' => TB_PROJECT], $complete);
-            $date      = $yesterday;
-            $isYesterday = true;
-        }
-        header('X-Complete: ' . ($complete ? '1' : '0'));
-
-        // Подсчёт по статусам (как в ThroneBaron)
-        // done       = выполнено
-        // in_progress = в работе
-        // available   = запланированы, ещё не начаты
-        // pending     = ждут условий
-        // missed      = пропущено
-        $totalCnt      = count($allTasks);
-        $doneCnt       = 0;
-        $inProgressCnt = 0;
-        $missedCnt     = 0;
-        $availableCnt  = 0;
-        $pendingCnt    = 0;
-        foreach ($allTasks as $t) {
-            $st = $t['status'] ?? '';
-            if      ($st === 'done')        $doneCnt++;
-            elseif  ($st === 'in_progress') $inProgressCnt++;
-            elseif  ($st === 'missed')      $missedCnt++;
-            elseif  ($st === 'available')   $availableCnt++;
-            elseif  ($st === 'pending')     $pendingCnt++;
-        }
-        // % как в ThroneBaron: выполнено / всего
-        $rate = $totalCnt > 0 ? round($doneCnt / $totalCnt * 100) : 0;
-
-        // Разбор выполнения за выбранный день по 2-часовым корзинам (00:00..22:00, MSK).
-        // Учитываем ВСЕ выполненные задачи (status === 'done'):
-        //   - started_at в тот же день (MSK) -> в корзину своего 2-часового интервала;
-        //   - нет started_at ИЛИ started_at другого дня -> в счётчик $doneNoTime
-        //     (например, задачу начали накануне вечером, а закрыли сегодня —
-        //      такую нельзя ставить в час сегодняшнего дня).
-        // Гарантия: sum($hourlyData) + $doneNoTime === $doneCnt.
-        $hourlyHours = array(0,2,4,6,8,10,12,14,16,18,20,22);
-        $hourlyData  = array();
-        foreach ($hourlyHours as $hh) { $hourlyData[$hh] = 0; }
-        $doneNoTime = 0;
-        foreach ($allTasks as $t) {
-            if (($t['status'] ?? '') !== 'done') continue;
-            $dt = msk_dt($t['started_at'] ?? null);
-            if ($dt === null) { $doneNoTime++; continue; }                 // нет времени
-            if ($dt->format('Y-m-d') !== $date) { $doneNoTime++; continue; } // другой день
-            $h = (int)$dt->format('H');
-            $bucket = $h - ($h % 2);            // 0,2,4,...,22
-            $hourlyData[$bucket]++;
-        }
-
-        // Смены — за ту же дату что и задачи
-        $shifts     = tb_get('/work-shifts', ['filter[date]' => $date, 'filter[project]' => TB_PROJECT]);
-        $shiftsData = $shifts['data'] ?? [];
-        $staffTotal = count($shiftsData);
-        $came = 0;
-        $shiftsFormatted = [];
-        foreach ($shiftsData as $s) {
-            $hasStarted = !empty($s['started_at']);
-            if ($hasStarted) $came++;
-            $inDt    = msk_dt($s['started_at'] ?? null);
-            $outDt   = msk_dt($s['ended_at'] ?? null);
-            $inTime  = $inDt  ? $inDt->format('H:i')  : null;
-            $outTime = $outDt ? $outDt->format('H:i') : null;
-            $profile  = $s['user']['profile'] ?? [];
-            $fullName = trim(($profile['last_name'] ?? '') . ' ' . ($profile['first_name'] ?? ''));
-            $pos      = strtolower($profile['position'] ?? '');
-            if (strpos($pos, 'двор') !== false) $role = 'Дворник';
-            elseif (strpos($pos, 'убор') !== false) $role = 'Уборщица';
-            elseif (strpos($pos, 'клин') !== false) $role = 'Клинер';
-            else $role = $profile['position'] ?? '—';
-            $shiftsFormatted[] = [
-                'name' => $fullName ?: ($profile['first_name'] ?? '—'),
-                'role' => $role,
-                'in'   => $inTime,
-                'out'  => $outTime,
-                'came' => $hasStarted,
-            ];
-        }
-
-        echo json_encode([
-            'date'        => $date,
-            'isYesterday' => $isYesterday,
-            'tasks'  => [
-                'total'       => $totalCnt,
-                'done'        => $doneCnt,
-                'in_progress' => $inProgressCnt,
-                'missed'      => $missedCnt,
-                'available'   => $availableCnt,
-                'pending'     => $pendingCnt,
-                'rate'        => $rate,
-                'hourly'        => array_values($hourlyData),
-                'hourly_hours'  => $hourlyHours,
-                'hourly_notime' => $doneNoTime,
-            ],
-            'staff'  => ['total' => $staffTotal, 'came' => $came, 'absent' => $staffTotal - $came],
-            'shifts' => $shiftsFormatted,
-        ], JSON_UNESCAPED_UNICODE);
+        set_time_limit(300);
+        $allowFallback = !isset($_GET['date']);
+        $reqDate = $_GET['date'] ?? $today;
+        $cacheDate = $allowFallback
+            ? null
+            : normalize_report_date($reqDate, $tz_msk, $today);
+        $cacheKey = bd_key('dashboard', $cacheDate);
+        proxy_serve_cached($cache, $cacheKey, static function () use ($reqDate, $allowFallback) {
+            return tb_dashboard($reqDate, $allowFallback);
+        });
         break;
 
     // ----------------------------------------------------------
@@ -784,85 +1154,10 @@ switch ($action) {
         $rawDate = $_GET['date'] ?? $today;
         $isRange = (strpos($rawDate, ',') !== false);
         $date    = $isRange ? $rawDate : normalize_report_date($rawDate, $tz_msk, $today);
-        set_time_limit($isRange ? 600 : 300);
-
-        $cacheFile = sys_get_temp_dir() . '/'
-            . ($isRange ? 'tb_hbp_' : 'tb_hb_') . TB_PROJECT . '_'
-            . ($isRange ? md5($date) : $date) . '.json';
-        $cacheTtl = $isRange ? 3900 : 900;
-
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtl) {
-            header('X-Cache: HIT');
-            echo file_get_contents($cacheFile);
-            break;
-        }
-
-        $allLocs  = get_all_locations();
-        $yardMap  = get_yard_map($allLocs);          // [houseId => yardLocationId, _terr => id]
-        $terrId   = $yardMap['_terr'] ?? null;
-        $rootLocs = array_filter($allLocs, function($l) {
-            return $l['project_id'] == TB_PROJECT && $l['parent_id'] === null;
+        $cacheKey = bd_key('house_breakdown', $date);
+        proxy_serve_cached($cache, $cacheKey, static function () use ($rawDate) {
+            return tb_house_breakdown($rawDate);
         });
-
-        $houses = [];
-        foreach ($rootLocs as $loc) {
-            $locId   = $loc['id'];
-            // Сам корень «Территория» не дом — его задачи раскладываются по дворам
-            if ($terrId !== null && (int)$locId === (int)$terrId) continue;
-            $locName = $loc['name'];
-            // Нежилые локации (офис) не показываем как дом
-            if (strpos($locName, 'Офис') !== false) continue;
-            $parts   = explode(' ', trim($locName), 2);
-            $houseId = count($parts) > 1 ? $parts[1] : $locName;
-
-            if ($isRange) {
-                $mop     = mop_stats_for_house_period((int)$locId, $date, $allLocs);
-                $mopDone = $mop['done'];
-                $mopMiss = $mop['missed'];
-                $yardId  = $yardMap[$houseId] ?? null;
-                $pdt     = pdt_stats_for_yard_period($yardId !== null ? (int)$yardId : null, $date);
-                $pdtDone = $pdt['done'];
-                $pdtMiss = $pdt['missed'];
-            } else {
-                $mop     = mop_stats_for_house((int)$locId, $date, $allLocs);
-                $mopDone = $mop['done'];
-                $mopMiss = $mop['missed'];
-                $yardId  = $yardMap[$houseId] ?? null;
-                $pdt     = pdt_stats_for_yard($yardId !== null ? (int)$yardId : null, $date);
-                $pdtDone = $pdt['done'];
-                $pdtMiss = $pdt['missed'];
-            }
-
-            // Светофор дома = МОП + ПДТ вместе
-            $dc = $mopDone + $pdtDone;
-            $mc = $mopMiss + $pdtMiss;
-            $total = $dc + $mc;
-            $rate  = $total > 0 ? round($dc/$total*100) : 100; // нет задач = 100%
-            $status = traffic_status($rate, $total);
-
-            $mopTot = $mopDone + $mopMiss;
-            $pdtTot = $pdtDone + $pdtMiss;
-            $houses[] = [
-                'id'=>$houseId,'label'=>$locName,'locationId'=>$locId,
-                'done'=>$dc,'missed'=>$mc,'total'=>$total,'pct'=>$rate,'status'=>$status,
-                'mop'=>['done'=>$mopDone,'missed'=>$mopMiss,'total'=>$mopTot,'pct'=>$mopTot>0?round($mopDone/$mopTot*100):0],
-                'pdt'=>['done'=>$pdtDone,'missed'=>$pdtMiss,'total'=>$pdtTot,'pct'=>$pdtTot>0?round($pdtDone/$pdtTot*100):0,'yardId'=>$yardId],
-            ];
-        }
-
-        usort($houses, function($a,$b){ return $a['pct'] - $b['pct']; });
-        $parts = explode(',', $date);
-        $result = json_encode([
-            'date'        => $date,
-            'dateFrom'    => $parts[0] ?? $date,
-            'dateTo'      => $parts[1] ?? ($parts[0] ?? $date),
-            'periodRange' => $isRange,
-            'periodLabel' => $isRange ? 'сумма по дням' : null,
-            'houses'      => $houses,
-            'cached'      => false,
-        ], JSON_UNESCAPED_UNICODE);
-        file_put_contents($cacheFile, $result);
-        echo $result;
         break;
 
     // ----------------------------------------------------------
