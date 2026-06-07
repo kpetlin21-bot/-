@@ -18,10 +18,24 @@ fi
 
 echo "=== Deploying to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH ==="
 
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
+  "mkdir -p ${REMOTE_PATH}data"
+
 scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
   "$DIR/index.html" \
   "$DIR/proxy.php" \
+  "$DIR/cache_db.php" \
+  "$DIR/cache_diag.php" \
+  "$DIR/db.php" \
+  "$DIR/sync.php" \
+  "$DIR/projects.php" \
+  "$DIR/projects_config.php" \
+  "$DIR/projects_lib.php" \
   "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
+
+scp -i "$SSH_KEY" -P "$REMOTE_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+  "$DIR/data/day_tasks_demo.json" \
+  "$REMOTE_USER@$REMOTE_HOST:${REMOTE_PATH}data/"
 
 echo ""
 echo "=== Deploy complete! ==="
@@ -29,3 +43,14 @@ ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" \
   "ls -lh ${REMOTE_PATH}index.html ${REMOTE_PATH}proxy.php"
 echo "Dashboard: https://api.cleansyst.ru/index.html"
 echo "Proxy:     https://api.cleansyst.ru/proxy.php?action=help"
+
+echo ""
+echo "=== Running full sync ==="
+curl -sS -m 7200 "https://api.cleansyst.ru/sync.php?mode=full&secret=cleansyst2026" \
+  | tail -n 40 || echo "(sync skipped or timed out — run manually)"
+
+echo ""
+echo "=== Cache after sync ==="
+curl -sS "https://api.cleansyst.ru/cache_diag.php?secret=cleansyst2026&format=table" \
+  | tail -n 50 || echo "(cache_diag unavailable)"
+echo ""
