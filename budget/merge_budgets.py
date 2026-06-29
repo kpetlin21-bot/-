@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl
+from openpyxl.utils import get_column_letter
 
 DATA_COLS = list(range(2, 10))  # B..I
 DASH = "-"
@@ -132,12 +133,10 @@ ROW_CHILDREN: dict[int, list[int]] = {
     95: [96, 97],
 }
 
-# Сначала считаем вложенные итоги, затем верхнеуровневые.
-SUM_ORDER = [6, 13, 34, 48, 52, 60, 82, 87, 91, 95, 4, 10, 45]
-
 CALC_ROWS = {43, 44, 80, 81, 89, 90, 98, 99}
 SUM_ROWS = {4, 6, 10, 13, 34, 45, 48, 52, 60, 82, 87, 91, 95}
 LEAF_ROWS = {row for row, _, _ in TEMPLATE_ROWS} - SUM_ROWS - CALC_ROWS - {1, 3}
+PERCENT_ROWS = {44, 81, 90, 99}
 
 LABEL_ALIASES = {
     "Расходные материалы и инстументы (ПТ)": "Расходные материалы и инстументы  (ПТ)",
@@ -271,78 +270,63 @@ def extract_row_values(ws) -> dict[int, dict[int, Any]]:
         else:
             rows[row] = dict(values)
 
-    # В формате «Доходы/Расходы» верхняя выручка хранится в строке «Доходы».
-    if all(is_dash(rows.get(4, {}).get(col)) for col in DATA_COLS):
-        alt = pick_source_values(index, "Доходы", None)
-        if alt:
-            rows[4] = dict(alt)
-
-    # Внутренняя выручка: если нет отдельной строки, берём дочернюю «Выручка» из блока доходов.
-    inner = pick_source_values(index, "Выручка", None, prefer_row=6)
-    if inner and any(not is_dash(inner.get(col)) for col in DATA_COLS):
-        rows[6] = dict(inner)
+    # В формате «Доходы/Расходы» выручка часто только в строке «Доходы» / «Выручка».
+    if all(is_dash(rows.get(7, {}).get(col)) for col in DATA_COLS):
+        for label in ("Реализация услуг Клининг (ОД)", "Выручка", "Доходы"):
+            alt = pick_source_values(index, label, None)
+            if alt and any(not is_dash(alt.get(col)) for col in DATA_COLS):
+                rows[7] = dict(alt)
+                break
 
     return rows
-
-
-def sum_row_values(rows: dict[int, dict[int, Any]], children: list[int], col: int) -> float | None:
-    total = 0.0
-    has_value = False
-    for child in children:
-        val = to_number(rows.get(child, {}).get(col))
-        if val is not None:
-            total += val
-            has_value = True
-    return total if has_value else None
-
-
-def set_row(rows: dict[int, dict[int, Any]], row: int, col: int, value: Any) -> None:
-    rows.setdefault(row, {})
-    rows[row][col] = value
-
-
-def recalc_rows(rows: dict[int, dict[int, Any]]) -> None:
-    for parent in SUM_ORDER:
-        children = ROW_CHILDREN[parent]
-        for col in DATA_COLS:
-            total = sum_row_values(rows, children, col)
-            set_row(rows, parent, col, total if total is not None else DASH)
-
-    for col in DATA_COLS:
-        revenue = to_number(rows.get(4, {}).get(col))
-        direct = to_number(rows.get(10, {}).get(col))
-        if revenue is not None and direct is not None:
-            set_row(rows, 43, col, revenue - direct)
-
-        gross = to_number(rows.get(43, {}).get(col))
-        indirect = to_number(rows.get(45, {}).get(col)) or 0.0
-        if gross is not None:
-            set_row(rows, 80, col, gross - indirect)
-
-        op = to_number(rows.get(80, {}).get(col))
-        other_in = to_number(rows.get(82, {}).get(col)) or 0.0
-        other_out = to_number(rows.get(87, {}).get(col)) or 0.0
-        if op is not None:
-            set_row(rows, 89, col, op + other_in - other_out)
-
-        ebitda = to_number(rows.get(89, {}).get(col))
-        amort = to_number(rows.get(91, {}).get(col)) or 0.0
-        interest = to_number(rows.get(94, {}).get(col)) or 0.0
-        tax = to_number(rows.get(95, {}).get(col)) or 0.0
-        if ebitda is not None:
-            set_row(rows, 98, col, ebitda - amort - interest - tax)
-
-        revenue_den = to_number(rows.get(4, {}).get(col))
-        if revenue_den not in (None, 0):
-            for target, numerator_row in [(44, 43), (81, 80), (90, 89), (99, 98)]:
-                num = to_number(rows.get(numerator_row, {}).get(col))
-                if num is not None:
-                    set_row(rows, target, col, f"{num / revenue_den * 100:.2f}%")
 
 
 def load_template_ws(template_path: Path):
     wb = openpyxl.load_workbook(template_path)
     return wb, wb.active
+
+
+def cell_ref(row: int, col: int) -> str:
+    return f"{get_column_letter(col)}{row}"
+
+
+def sum_formula(children: list[int], col: int) -> str:
+    refs = ",".join(cell_ref(child, col) for child in children)
+    return f"=SUM({refs})"
+
+
+def cross_sheet_sum_formula(sheet_names: list[str], row: int, col: int) -> str:
+    refs = ",".join(f"'{name}'!{cell_ref(row, col)}" for name in sheet_names)
+    return f"=SUM({refs})"
+
+
+def apply_calc_formulas(ws, col: int) -> None:
+    c = cell_ref
+    ws.cell(43, col).value = f"={c(4, col)}-{c(10, col)}"
+    ws.cell(44, col).value = f'=IF({c(4, col)}=0,"-",{c(43, col)}/{c(4, col)})'
+    ws.cell(80, col).value = f"={c(43, col)}-{c(45, col)}"
+    ws.cell(81, col).value = f'=IF({c(4, col)}=0,"-",{c(80, col)}/{c(4, col)})'
+    ws.cell(89, col).value = f"={c(80, col)}+{c(82, col)}-{c(87, col)}"
+    ws.cell(90, col).value = f'=IF({c(4, col)}=0,"-",{c(89, col)}/{c(4, col)})'
+    ws.cell(98, col).value = f"={c(89, col)}-{c(91, col)}-{c(94, col)}-{c(95, col)}"
+    ws.cell(99, col).value = f'=IF({c(4, col)}=0,"-",{c(98, col)}/{c(4, col)})'
+
+
+def apply_sum_formulas(ws) -> None:
+    for parent, children in ROW_CHILDREN.items():
+        for col in DATA_COLS:
+            ws.cell(parent, col).value = sum_formula(children, col)
+    for col in DATA_COLS:
+        apply_calc_formulas(ws, col)
+    for row in PERCENT_ROWS:
+        for col in DATA_COLS:
+            ws.cell(row, col).number_format = "0.00%"
+
+
+def write_leaf_values(ws, rows: dict[int, dict[int, Any]]) -> None:
+    for row in LEAF_ROWS:
+        for col in DATA_COLS:
+            ws.cell(row, col).value = rows.get(row, {}).get(col, DASH)
 
 
 def write_sheet(
@@ -361,25 +345,30 @@ def write_sheet(
     if header_label:
         ws.cell(3, 1).value = header_label
 
-    for row, _, _ in TEMPLATE_ROWS:
-        for col in DATA_COLS:
-            ws.cell(row, col).value = rows.get(row, {}).get(col, DASH)
+    write_leaf_values(ws, rows)
+    apply_sum_formulas(ws)
 
 
-def sum_projects(project_rows: list[dict[int, dict[int, Any]]]) -> dict[int, dict[int, Any]]:
-    consolidated: dict[int, dict[int, Any]] = {}
+def write_consolidated_sheet(
+    ws,
+    template_ws,
+    project_sheet_names: list[str],
+    header_label: str,
+) -> None:
+    for row in range(1, template_ws.max_row + 1):
+        for col in range(1, template_ws.max_column + 1):
+            src = template_ws.cell(row, col)
+            dst = ws.cell(row, col)
+            dst.value = src.value
+            copy_cell_style(src, dst)
+
+    ws.cell(3, 1).value = header_label
+
     for row in LEAF_ROWS:
-        consolidated[row] = {}
         for col in DATA_COLS:
-            total = 0.0
-            has_value = False
-            for project in project_rows:
-                val = to_number(project.get(row, {}).get(col))
-                if val is not None:
-                    total += val
-                    has_value = True
-            consolidated[row][col] = total if has_value else DASH
-    return consolidated
+            ws.cell(row, col).value = cross_sheet_sum_formula(project_sheet_names, row, col)
+
+    apply_sum_formulas(ws)
 
 
 def build_workbook(
@@ -401,14 +390,12 @@ def build_workbook(
     out_wb = openpyxl.Workbook()
     out_wb.remove(out_wb.active)
 
-    project_rows: list[dict[int, dict[int, Any]]] = []
+    project_sheet_names: list[str] = []
     used_titles: set[str] = set()
 
     for path in files:
         src_wb = openpyxl.load_workbook(path, data_only=True)
         rows = extract_row_values(src_wb.active)
-        recalc_rows(rows)
-        project_rows.append(rows)
 
         title = sheet_title_from_filename(path)
         base = title
@@ -418,16 +405,14 @@ def build_workbook(
             title = (base[: 31 - len(suffix)] + suffix)
             n += 1
         used_titles.add(title)
+        project_sheet_names.append(title)
 
         ws = out_wb.create_sheet(title=title)
         write_sheet(ws, template_ws, rows, header_label=title)
         src_wb.close()
 
-    consolidated = sum_projects(project_rows)
-    recalc_rows(consolidated)
-
     summary = out_wb.create_sheet(title=consolidated_title[:31], index=0)
-    write_sheet(summary, template_ws, consolidated, header_label=header_label)
+    write_consolidated_sheet(summary, template_ws, project_sheet_names, header_label)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     out_wb.save(output_path)
