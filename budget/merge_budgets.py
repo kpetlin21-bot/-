@@ -362,10 +362,16 @@ def apply_calc_formulas(ws, col: int) -> None:
 
 
 def apply_sum_formulas(ws) -> None:
+    """Записывает родительские SUM-строки и расчётные строки.
+
+    Для всех колонок кроме B и H — Excel-формулы =SUM(...).
+    Для колонки B — Excel-формула =SUM(B_дочерние) (B листовых строк уже числа,
+    поэтому B родительской строки тоже будет числом после пересчёта в Excel).
+    Для колонки H (ноябрь) — прочерк.
+    """
     for parent, children in ROW_CHILDREN.items():
         for col in DATA_COLS:
             if col == COL_NOV:
-                # В ноябре ничего не суммируем — ставим прочерк
                 ws.cell(parent, col).value = DASH
             else:
                 ws.cell(parent, col).value = sum_formula(children, col)
@@ -379,25 +385,105 @@ def apply_sum_formulas(ws) -> None:
             ws.cell(row, col).number_format = "0.00%"
 
 
+def precalc_b_column(ws) -> None:
+    """Обходит все строки и вычисляет значение B в Python,
+    чтобы Excel показывал числа сразу при открытии файла,
+    а не ждал пересчёта формул.
+    """
+    def read_b(r: int) -> float:
+        v = ws.cell(r, COL_TOTAL).value
+        if v is None or v == DASH:
+            return 0.0
+        if isinstance(v, (int, float)):
+            return float(v)
+        if isinstance(v, str) and v.startswith("=SUM("):
+            # Суммируем дочерние строки рекурсивно
+            inner = v[5:-1]  # убираем =SUM( и )
+            parts = inner.split(",")
+            total = 0.0
+            for p in parts:
+                p = p.strip()
+                # "B7" → row 7
+                try:
+                    child_row = int(p[1:])
+                    total += read_b(child_row)
+                except Exception:
+                    pass
+            return total
+        return 0.0
+
+    # Сначала пересчитываем leaf rows (они уже числа — ничего не делаем)
+    # Затем parent rows (SUM формулы) → вычисляем и заменяем числом
+    # Порядок: сначала вложенные, потом верхнеуровневые
+    for parent in [6, 13, 34, 48, 52, 60, 82, 87, 91, 95, 4, 10, 45]:
+        children = ROW_CHILDREN.get(parent, [])
+        total = sum(read_b(c) for c in children)
+        ws.cell(parent, COL_TOTAL).value = total if total else DASH
+
+    # Расчётные строки
+    def nb(r):
+        v = ws.cell(r, COL_TOTAL).value
+        return float(v) if isinstance(v, (int, float)) else 0.0
+
+    rev    = nb(4)
+    direct = nb(10)
+    gross  = rev - direct
+    ws.cell(43, COL_TOTAL).value = gross
+
+    indir = nb(45)
+    op    = gross - indir
+    ws.cell(80, COL_TOTAL).value = op
+
+    other_in  = nb(82)
+    other_out = nb(87)
+    ebitda = op + other_in - other_out
+    ws.cell(89, COL_TOTAL).value = ebitda
+
+    amort    = nb(91)
+    interest = nb(94)
+    tax      = nb(95)
+    net      = ebitda - amort - interest - tax
+    ws.cell(98, COL_TOTAL).value = net
+
+    def pct(num, den):
+        return f"{num/den*100:.2f}%" if den else DASH
+
+    ws.cell(44, COL_TOTAL).value = pct(gross, rev)
+    ws.cell(81, COL_TOTAL).value = pct(op, rev)
+    ws.cell(90, COL_TOTAL).value = pct(ebitda, rev)
+    ws.cell(99, COL_TOTAL).value = pct(net, rev)
+
+
 COL_TOTAL   = 2  # B — Итого
 COL_NOV     = 8  # H — ноябрь
 SUM_MONTHS  = [3, 4, 5, 6]  # C D E F — июнь, июль, август, сентябрь
 
 
+def month_total(rows: dict[int, dict[int, Any]], row: int) -> Any:
+    """B = сумма месяцев C+D+E+F, ноябрь исключён."""
+    total = 0.0
+    has = False
+    for col in SUM_MONTHS:
+        v = to_number(rows.get(row, {}).get(col))
+        if v is not None:
+            total += v
+            has = True
+    return total if has else DASH
+
+
 def write_leaf_values(ws, rows: dict[int, dict[int, Any]]) -> None:
     for row in LEAF_ROWS:
-        # Ноябрь (H) — исключаем из расчётов
+        # Ноябрь (H) — исключаем
         ws.cell(row, COL_NOV).value = DASH
 
-        # Остальные месяцы (C..G, I) — из исходника
+        # Месяцы C..G, I — из исходника
         for col in DATA_COLS:
             if col in (COL_TOTAL, COL_NOV):
                 continue
             ws.cell(row, col).value = rows.get(row, {}).get(col, DASH)
 
-        # B (Итого) = SUM(C,D,E,F) — только июнь–сентябрь
-        month_refs = ",".join(f"{get_column_letter(c)}{row}" for c in SUM_MONTHS)
-        ws.cell(row, COL_TOTAL).value = f"=SUM({month_refs})"
+        # B (Итого) = сумма C+D+E+F вычисленная в Python (число, не формула)
+        ws.cell(row, COL_TOTAL).value = month_total(rows, row)
 
 
 def write_sheet(
@@ -418,6 +504,7 @@ def write_sheet(
 
     write_leaf_values(ws, rows)
     apply_sum_formulas(ws)
+    precalc_b_column(ws)
 
 
 def write_consolidated_sheet(
@@ -439,15 +526,13 @@ def write_consolidated_sheet(
         # Ноябрь — исключаем
         ws.cell(row, COL_NOV).value = DASH
 
-        # Листовые итоги по ЖК-листам (кроме B и H)
+        # Все колонки включая B — кросс-листовые суммы.
+        # B на листах ЖК уже pre-computed числа, поэтому
+        # =SUM('ЖК1'!B7, 'ЖК2'!B7, ...) сразу даёт правильное число в Excel.
         for col in DATA_COLS:
-            if col in (COL_TOTAL, COL_NOV):
+            if col == COL_NOV:
                 continue
             ws.cell(row, col).value = cross_sheet_sum_formula(project_sheet_names, row, col)
-
-        # B (Итого) = SUM(C,D,E,F) — явная сумма месяцев, без ноября
-        month_refs = ",".join(f"{get_column_letter(c)}{row}" for c in SUM_MONTHS)
-        ws.cell(row, COL_TOTAL).value = f"=SUM({month_refs})"
 
     apply_sum_formulas(ws)
 
