@@ -339,6 +339,12 @@ def safe(ref: str) -> str:
     return f"IFERROR({ref}*1,0)"
 
 
+def apply_calc_formulas_dash(ws, col: int) -> None:
+    """Ноябрь: все расчётные строки = прочерк."""
+    for row in CALC_ROWS:
+        ws.cell(row, col).value = DASH
+
+
 def apply_calc_formulas(ws, col: int) -> None:
     c = cell_ref
     ws.cell(43, col).value = f"={c(4, col)}-{c(10, col)}"
@@ -358,18 +364,40 @@ def apply_calc_formulas(ws, col: int) -> None:
 def apply_sum_formulas(ws) -> None:
     for parent, children in ROW_CHILDREN.items():
         for col in DATA_COLS:
-            ws.cell(parent, col).value = sum_formula(children, col)
+            if col == COL_NOV:
+                # В ноябре ничего не суммируем — ставим прочерк
+                ws.cell(parent, col).value = DASH
+            else:
+                ws.cell(parent, col).value = sum_formula(children, col)
     for col in DATA_COLS:
-        apply_calc_formulas(ws, col)
+        if col == COL_NOV:
+            apply_calc_formulas_dash(ws, col)
+        else:
+            apply_calc_formulas(ws, col)
     for row in PERCENT_ROWS:
         for col in DATA_COLS:
             ws.cell(row, col).number_format = "0.00%"
 
 
+COL_TOTAL   = 2  # B — Итого
+COL_NOV     = 8  # H — ноябрь
+SUM_MONTHS  = [3, 4, 5, 6]  # C D E F — июнь, июль, август, сентябрь
+
+
 def write_leaf_values(ws, rows: dict[int, dict[int, Any]]) -> None:
     for row in LEAF_ROWS:
+        # Ноябрь (H) — исключаем из расчётов
+        ws.cell(row, COL_NOV).value = DASH
+
+        # Остальные месяцы (C..G, I) — из исходника
         for col in DATA_COLS:
+            if col in (COL_TOTAL, COL_NOV):
+                continue
             ws.cell(row, col).value = rows.get(row, {}).get(col, DASH)
+
+        # B (Итого) = SUM(C,D,E,F) — только июнь–сентябрь
+        month_refs = ",".join(f"{get_column_letter(c)}{row}" for c in SUM_MONTHS)
+        ws.cell(row, COL_TOTAL).value = f"=SUM({month_refs})"
 
 
 def write_sheet(
@@ -408,8 +436,18 @@ def write_consolidated_sheet(
     ws.cell(3, 1).value = header_label
 
     for row in LEAF_ROWS:
+        # Ноябрь — исключаем
+        ws.cell(row, COL_NOV).value = DASH
+
+        # Листовые итоги по ЖК-листам (кроме B и H)
         for col in DATA_COLS:
+            if col in (COL_TOTAL, COL_NOV):
+                continue
             ws.cell(row, col).value = cross_sheet_sum_formula(project_sheet_names, row, col)
+
+        # B (Итого) = SUM(C,D,E,F) — явная сумма месяцев, без ноября
+        month_refs = ",".join(f"{get_column_letter(c)}{row}" for c in SUM_MONTHS)
+        ws.cell(row, COL_TOTAL).value = f"=SUM({month_refs})"
 
     apply_sum_formulas(ws)
 
