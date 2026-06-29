@@ -273,6 +273,24 @@ def pick_source_values(
     return candidates[0][1]
 
 
+def clean_leaf_value(value: Any) -> Any:
+    """Посторонний текст (баннеры ПланФакт и т.п.) заменяем на прочерк."""
+    if value is None:
+        return DASH
+    if isinstance(value, (int, float)):
+        return value
+    s = str(value).strip()
+    if s in ("", DASH, "-"):
+        return DASH
+    # Числовая строка → конвертируем
+    try:
+        return float(s.replace(",", ".").replace(" ", ""))
+    except ValueError:
+        pass
+    # Всё остальное (текст, баннеры ПланФакт) — прочерк
+    return DASH
+
+
 def extract_row_values(ws) -> dict[int, dict[int, Any]]:
     index = build_source_index(ws)
     rows: dict[int, dict[int, Any]] = {}
@@ -284,14 +302,14 @@ def extract_row_values(ws) -> dict[int, dict[int, Any]]:
         if values is None:
             rows[row] = {col: DASH for col in DATA_COLS}
         else:
-            rows[row] = dict(values)
+            rows[row] = {col: clean_leaf_value(v) for col, v in values.items()}
 
     # В формате «Доходы/Расходы» выручка часто только в строке «Доходы» / «Выручка».
     if all(is_dash(rows.get(7, {}).get(col)) for col in DATA_COLS):
         for label in ("Реализация услуг Клининг (ОД)", "Выручка", "Доходы"):
             alt = pick_source_values(index, label, None)
             if alt and any(not is_dash(alt.get(col)) for col in DATA_COLS):
-                rows[7] = dict(alt)
+                rows[7] = {col: clean_leaf_value(v) for col, v in alt.items()}
                 break
 
     return rows
@@ -316,16 +334,25 @@ def cross_sheet_sum_formula(sheet_names: list[str], row: int, col: int) -> str:
     return f"=SUM({refs})"
 
 
+def safe(ref: str) -> str:
+    """Оборачивает ссылку в IFERROR(*1,0) чтобы прочерки «-» не давали #VALUE!."""
+    return f"IFERROR({ref}*1,0)"
+
+
 def apply_calc_formulas(ws, col: int) -> None:
     c = cell_ref
     ws.cell(43, col).value = f"={c(4, col)}-{c(10, col)}"
-    ws.cell(44, col).value = f'=IF({c(4, col)}=0,"-",{c(43, col)}/{c(4, col)})'
+    ws.cell(44, col).value = f'=IFERROR(IF({c(4, col)}=0,"-",{c(43, col)}/{c(4, col)}),"-")'
     ws.cell(80, col).value = f"={c(43, col)}-{c(45, col)}"
-    ws.cell(81, col).value = f'=IF({c(4, col)}=0,"-",{c(80, col)}/{c(4, col)})'
-    ws.cell(89, col).value = f"={c(80, col)}+{c(82, col)}-{c(87, col)}"
-    ws.cell(90, col).value = f'=IF({c(4, col)}=0,"-",{c(89, col)}/{c(4, col)})'
-    ws.cell(98, col).value = f"={c(89, col)}-{c(91, col)}-{c(94, col)}-{c(95, col)}"
-    ws.cell(99, col).value = f'=IF({c(4, col)}=0,"-",{c(98, col)}/{c(4, col)})'
+    ws.cell(81, col).value = f'=IFERROR(IF({c(4, col)}=0,"-",{c(80, col)}/{c(4, col)}),"-")'
+    ws.cell(89, col).value = f"={c(80, col)}+{safe(c(82, col))}-{safe(c(87, col))}"
+    ws.cell(90, col).value = f'=IFERROR(IF({c(4, col)}=0,"-",{c(89, col)}/{c(4, col)}),"-")'
+    # R94 (Проценты по кредитам) — листовая строка, может содержать «-» вместо числа
+    ws.cell(98, col).value = (
+        f"={safe(c(89, col))}-{safe(c(91, col))}"
+        f"-{safe(c(94, col))}-{safe(c(95, col))}"
+    )
+    ws.cell(99, col).value = f'=IFERROR(IF({c(4, col)}=0,"-",{c(98, col)}/{c(4, col)}),"-")'
 
 
 def apply_sum_formulas(ws) -> None:
