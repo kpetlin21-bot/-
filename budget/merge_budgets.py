@@ -177,12 +177,43 @@ def to_number(value: Any) -> float | None:
 
 def sheet_title_from_filename(path: Path) -> str:
     name = path.stem
+    mapping = {
+        "Астон_Движение": "Астон.Движение",
+        "Астон_Реформа": "Астон.Реформа",
+        "Дом Милый Дом": "Милый дом",
+        "Дом Милы": "Милый дом",
+        "ДМД": "Милый дом",
+        "River Park": "River Park",
+    }
+    for key, title in mapping.items():
+        if key in name:
+            return title[:31]
+    if "ДМД" in name or "Милый" in name or "Милы" in name:
+        return "Милый дом"
     for marker in ['ЖК _', 'ЖК "']:
         if marker in name:
             part = name.split(marker, 1)[1]
             part = part.split("_", 1)[0].split('"', 1)[0].strip()
             return part[:31]
     return path.stem[:31]
+
+
+def resolve_template_path(input_dir: Path) -> Path:
+    bundled = Path(__file__).parent / "template" / "bdr_template.xlsx"
+    if bundled.exists():
+        return bundled
+    ekaterinburg = Path(__file__).parent / "input" / "Екатеринбург"
+    if ekaterinburg.exists():
+        apri = next(ekaterinburg.glob("*АПРИ*"), None)
+        if apri:
+            return apri
+    apri_in_input = next(input_dir.glob("**/*АПРИ*"), None)
+    if apri_in_input:
+        return apri_in_input
+    files = sorted(input_dir.glob("**/*.xlsx"))
+    if not files:
+        raise SystemExit(f"Нет .xlsx файлов в {input_dir}")
+    return files[0]
 
 
 def copy_cell_style(src, dst) -> None:
@@ -284,8 +315,8 @@ def recalc_rows(rows: dict[int, dict[int, Any]]) -> None:
             set_row(rows, 43, col, revenue - direct)
 
         gross = to_number(rows.get(43, {}).get(col))
-        indirect = to_number(rows.get(45, {}).get(col))
-        if gross is not None and indirect is not None:
+        indirect = to_number(rows.get(45, {}).get(col)) or 0.0
+        if gross is not None:
             set_row(rows, 80, col, gross - indirect)
 
         op = to_number(rows.get(80, {}).get(col))
@@ -328,9 +359,7 @@ def write_sheet(
             copy_cell_style(src, dst)
 
     if header_label:
-        for row, label, _ in TEMPLATE_ROWS:
-            if label.startswith('ЖК "'):
-                ws.cell(row, 1).value = header_label
+        ws.cell(3, 1).value = header_label
 
     for row, _, _ in TEMPLATE_ROWS:
         for col in DATA_COLS:
@@ -353,12 +382,20 @@ def sum_projects(project_rows: list[dict[int, dict[int, Any]]]) -> dict[int, dic
     return consolidated
 
 
-def build_workbook(input_dir: Path, output_path: Path, consolidated_title: str) -> None:
-    files = sorted(input_dir.glob("*.xlsx"))
+def build_workbook(
+    input_dir: Path,
+    output_path: Path,
+    consolidated_title: str,
+    header_label: str | None = None,
+) -> None:
+    files = sorted(input_dir.glob("**/*.xlsx"))
     if not files:
         raise SystemExit(f"Нет .xlsx файлов в {input_dir}")
 
-    template_file = next((f for f in files if "АПРИ" in f.name), files[0])
+    if header_label is None:
+        header_label = consolidated_title
+
+    template_file = resolve_template_path(input_dir)
     template_wb, template_ws = load_template_ws(template_file)
 
     out_wb = openpyxl.Workbook()
@@ -383,14 +420,14 @@ def build_workbook(input_dir: Path, output_path: Path, consolidated_title: str) 
         used_titles.add(title)
 
         ws = out_wb.create_sheet(title=title)
-        write_sheet(ws, template_ws, rows, header_label=f'ЖК "{title}"')
+        write_sheet(ws, template_ws, rows, header_label=title)
         src_wb.close()
 
     consolidated = sum_projects(project_rows)
     recalc_rows(consolidated)
 
     summary = out_wb.create_sheet(title=consolidated_title[:31], index=0)
-    write_sheet(summary, template_ws, consolidated, header_label="Сводный бюджет Екатеринбурга")
+    write_sheet(summary, template_ws, consolidated, header_label=header_label)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     out_wb.save(output_path)
@@ -407,8 +444,9 @@ def main() -> None:
         default=Path(__file__).parent / "output" / "Сводный бюджет Екатеринбурга.xlsx",
     )
     parser.add_argument("--title", default="Сводный бюджет Екатеринбурга")
+    parser.add_argument("--header", default=None, help="Заголовок в ячейке A3 сводного листа")
     args = parser.parse_args()
-    build_workbook(args.input, args.output, args.title)
+    build_workbook(args.input, args.output, args.title, header_label=args.header)
     print(f"Готово: {args.output}")
 
 
