@@ -183,12 +183,28 @@ def sheet_title_from_filename(path: Path) -> str:
         "Дом Милы": "Милый дом",
         "ДМД": "Милый дом",
         "River Park": "River Park",
+        "Астрид": "Астрид",
+        "Новое Колпино": "Новое Колпино",
+        "Курортный": "Курортный",
+        "Таллинский парк": "Таллинский парк",
     }
     for key, title in mapping.items():
         if key in name:
             return title[:31]
     if "ДМД" in name or "Милый" in name or "Милы" in name:
         return "Милый дом"
+    # Читаем название ЖК прямо из файла (R3)
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+        ws = next(iter(wb.worksheets))
+        r3 = str(ws.cell(3, 1).value or "").strip()
+        wb.close()
+        if r3:
+            clean = r3.replace('ЖК "', '').replace('ЖК ', '').replace('"', '').strip()
+            if clean:
+                return clean[:31]
+    except Exception:
+        pass
     for marker in ['ЖК _', 'ЖК "']:
         if marker in name:
             part = name.split(marker, 1)[1]
