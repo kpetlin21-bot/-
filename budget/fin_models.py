@@ -184,50 +184,45 @@ def calc_totals(d: dict) -> dict:
     op = gross - indirect
     tax = s.get("usn",0) + s.get("nds",0)
     net = op - tax
+    usn_fixed = sum(d.get("usn", [0,0,0,0])) if "usn" in d else 0
     return {
         "rev": rev, "fot_direct": fot_direct, "fot_indirect": fot_indirect,
         "fot_total": fot_total, "non_fot": non_fot, "direct": direct,
         "indirect": indirect, "gross": gross, "op": op, "tax": tax, "net": net,
+        "usn_fixed": usn_fixed,
     }
 
-def required_rev_for_same_net(base: dict, fot_growth: float) -> tuple[float, float]:
-    """Возвращает (новая выручка, прирост выручки) чтобы сохранить текущую чистую прибыль."""
-    fot_increase = base["fot_total"] * fot_growth
-    new_net_target = base["net"]
-    # Net = Rev - Direct_new - Indirect - Tax
-    # Tax_nds ≈ Rev * nds_rate; УСН = fixed
-    # Solve: Rev*(1-nds_rate) - (direct_new + indirect + usn) = new_net_target
-    usn = sum(d.get("usn",0) for m_vals in [DATA[jk] for jk in DATA if jk in DATA] for d in [])
-    # Simple: ΔRev = ΔCost (ignoring НДС on incremental revenue for simplicity of model)
-    # More accurate: НДС = Rev × 5/105 → ΔRevenue_needed = ΔCost / (1 - 5/105)
-    nds_rate = 5 / 105  # ~4.76%
-    new_revenue = (base["rev"] * (1 - nds_rate) + fot_increase) / (1 - nds_rate)
-    delta = new_revenue - base["rev"]
-    return new_revenue, delta
+def required_rev_for_margin(base: dict, fot_growth: float,
+                            target_margin: float) -> tuple[float, float]:
+    """Возвращает (новая выручка, прирост выручки) для заданной маржи при росте ФОТ.
 
-def required_rev_for_target_margin(base_data: dict, target_margin: float) -> tuple[float, float]:
-    """Возвращает (новая выручка, прирост) для достижения целевой чистой маржи."""
-    t = calc_totals(base_data)
-    fixed_costs = t["direct"] + t["indirect"] + t.get("usn", sum(base_data.get("usn", [0,0,0,0])))
+    Формула:
+        Net = Rev*(1 - НДС_rate) - (direct_new + indirect + УСН) = target * Rev
+        Rev*(1 - НДС_rate - target) = direct_new + indirect + УСН
+    """
     nds_rate = 5 / 105
-    # Net = Rev*(1-nds_rate) - fixed_costs = target_margin * Rev
-    # Rev*(1 - nds_rate - target_margin) = fixed_costs
-    usn_total = sum(base_data.get("usn", [0,0,0,0]))
-    nds_paid = sum(base_data.get("nds", [0,0,0,0]))
-    # НДС is computed as Revenue * 5/105
-    # Net = Revenue - direct - indirect - usn - nds
-    # nds = Revenue * 5/105
-    # Net = Revenue*(1 - 5/105) - (direct + indirect + usn) = target * Revenue
-    # Revenue*(1 - 5/105 - target) = direct + indirect + usn
-    fixed = t["direct"] + t["indirect"] + usn_total
-    new_rev = fixed / (1 - nds_rate - target_margin)
-    return new_rev, new_rev - t["rev"]
+    fot_increase = base["fot_total"] * fot_growth
+    fixed = base["direct"] + fot_increase + base["indirect"] + base.get("usn_fixed", 0)
+    denominator = 1 - nds_rate - target_margin
+    if denominator <= 0:
+        return base["rev"], 0.0
+    new_rev = fixed / denominator
+    return new_rev, new_rev - base["rev"]
+
+def required_rev_for_target_margin(base_data: dict, target_margin: float,
+                                   fot_growth: float = 0.0) -> tuple[float, float]:
+    """Возвращает (новая выручка, прирост) для целевой маржи при заданном росте ФОТ."""
+    t = calc_totals(base_data)
+    t["usn_fixed"] = sum(base_data.get("usn", [0, 0, 0, 0]))
+    return required_rev_for_margin(t, fot_growth, target_margin)
+
+
+TARGET_MARGIN = 0.20  # целевая рентабельность ЧП для всех сценарных листов
 
 
 def build_sheet(wb: Workbook, sheet_name: str, jk_name: str,
                 scenario_label: str, fot_growth: float,
-                base_data: dict, is_target_margin: bool = False,
-                target_margin: float = 0.0):
+                base_data: dict, is_current: bool = False):
     ws = wb.create_sheet(title=sheet_name[:31])
     ws.row_dimensions[1].height = 30
     ws.column_dimensions["A"].width = 38
@@ -250,19 +245,15 @@ def build_sheet(wb: Workbook, sheet_name: str, jk_name: str,
                   d.get("rev_snow",[0,0,0,0])[i]]) for i in range(4)]
     rev_total = sum(rev_m)
 
-    if fot_growth > 0 and not is_target_margin:
-        t = calc_totals(d)
-        new_rev, delta_rev = required_rev_for_same_net(t, fot_growth)
-        rev_factor = new_rev / rev_total if rev_total else 1
-        rev_scen = [v * rev_factor for v in rev_m]
-    elif is_target_margin:
-        new_rev, delta_rev = required_rev_for_target_margin(d, target_margin)
-        rev_factor = new_rev / rev_total if rev_total else 1
-        rev_scen = [v * rev_factor for v in rev_m]
-    else:
+    if is_current:
         new_rev = rev_total
-        delta_rev = 0
+        delta_rev = 0.0
         rev_scen = rev_m[:]
+    else:
+        # Сценарий: ФОТ растёт, цель — рентабельность ЧП 20%
+        new_rev, delta_rev = required_rev_for_target_margin(d, TARGET_MARGIN, fot_growth)
+        rev_factor = new_rev / rev_total if rev_total else 1
+        rev_scen = [v * rev_factor for v in rev_m]
 
     data_row(ws, ROW, "Реализация услуг (ОД)",
              d.get("rev_od",[0,0,0,0]) + [sum(d.get("rev_od",[0,0,0,0])), ""], indent=1); ROW+=1
@@ -445,40 +436,33 @@ def build_sheet(wb: Workbook, sheet_name: str, jk_name: str,
                   bg="1F3864", fg="FFFFFF")
     ROW += 1
 
-    results = []
-    if fot_growth > 0:
+    if is_current:
+        t = calc_totals(d)
+        results = [
+            ("Выручка (4 мес.)",                 f"{t['rev']:,.0f} ₽"),
+            ("ФОТ итого",                         f"{t['fot_total']:,.0f} ₽"),
+            ("ФОТ / Выручка",                    f"{t['fot_total']/t['rev']*100:.1f}%"),
+            ("Валовая прибыль",                  f"{t['gross']:,.0f} ₽"),
+            ("Валовая рентабельность",           f"{t['gross']/t['rev']*100:.1f}%"),
+            ("Операционная прибыль",             f"{t['op']:,.0f} ₽"),
+            ("Чистая прибыль",                   f"{t['net']:,.0f} ₽"),
+            ("Рентабельность чистой прибыли",    f"{t['net']/t['rev']*100:.1f}%"),
+        ]
+    else:
         results = [
             ("Текущая выручка (4 мес.)",          f"{rev_total:,.0f} ₽"),
-            (f"Прирост ФОТ (+{fot_growth*100:.0f}%)",  f"{FOT_DELTA:,.0f} ₽"),
+            (f"Прирост ФОТ (+{fot_growth*100:.0f}%)",  f"{FOT_DELTA:,.0f} ₽" if fot_growth > 0 else "—"),
+            (f"Цель: рент. чистой прибыли",       f"{TARGET_MARGIN*100:.0f}%"),
+            ("─" * 30,                            ""),
             ("Требуемая выручка (новый контракт)", f"{new_rev:,.0f} ₽"),
             ("Прирост выручки",                   f"{delta_rev:+,.0f} ₽"),
             ("Прирост контракта, %",              f"{delta_rev/rev_total*100:+.1f}%"),
+            ("─" * 30,                            ""),
             ("Требуемая МЕСЯЧНАЯ ставка",          f"{new_rev/4:,.0f} ₽/мес"),
             ("Текущая МЕСЯЧНАЯ ставка",            f"{rev_total/4:,.0f} ₽/мес"),
-            ("Рентабельность чистой прибыли",      f"{net_pct*100:.1f}%"),
-        ]
-    elif is_target_margin:
-        results = [
-            ("Текущая выручка (4 мес.)",           f"{rev_total:,.0f} ₽"),
-            (f"Цель: рентабельность чистой прибыли", f"{target_margin*100:.0f}%"),
-            ("Требуемая выручка для цели",          f"{new_rev:,.0f} ₽"),
-            ("Необходимый прирост выручки",         f"{delta_rev:+,.0f} ₽"),
-            ("Прирост контракта, %",               f"{delta_rev/rev_total*100:+.1f}%"),
-            ("Требуемая МЕСЯЧНАЯ ставка",           f"{new_rev/4:,.0f} ₽/мес"),
-            ("Текущая МЕСЯЧНАЯ ставка",             f"{rev_total/4:,.0f} ₽/мес"),
-            ("Текущая рентабельность ч.п.",        f"{net_base/rev_total*100:.1f}%"),
-        ]
-    else:
-        t = calc_totals(d)
-        results = [
-            ("Выручка (4 мес.)",                  f"{t['rev']:,.0f} ₽"),
-            ("ФОТ итого",                          f"{t['fot_total']:,.0f} ₽"),
-            ("ФОТ / Выручка",                     f"{t['fot_total']/t['rev']*100:.1f}%"),
-            ("Валовая прибыль",                   f"{t['gross']:,.0f} ₽"),
-            ("Валовая рентабельность",            f"{t['gross']/t['rev']*100:.1f}%"),
-            ("Операционная прибыль",              f"{t['op']:,.0f} ₽"),
-            ("Чистая прибыль",                    f"{t['net']:,.0f} ₽"),
-            ("Рентабельность чистой прибыли",     f"{t['net']/t['rev']*100:.1f}%"),
+            ("Прирост мес. ставки",               f"{(new_rev-rev_total)/4:+,.0f} ₽/мес"),
+            ("─" * 30,                            ""),
+            ("Рентабельность ЧП (сценарий)",       f"{net_pct*100:.1f}%"),
         ]
 
     for label, value in results:
@@ -504,16 +488,9 @@ def build_model(jk_name: str, output_path: Path):
     wb.remove(wb.active)
     d = DATA[jk_name]
 
-    if jk_name in ("Астрид", "Новое Колпино"):
-        build_sheet(wb, "Текущий бюджет",       jk_name, "Текущее состояние",       0.0, d)
-        build_sheet(wb, "+30% ФОТ",             jk_name, "Сценарий: ФОТ +30%",      0.3, d)
-        build_sheet(wb, "+40% ФОТ",             jk_name, "Сценарий: ФОТ +40%",      0.4, d)
-    else:  # Курортный
-        build_sheet(wb, "Текущий бюджет",       jk_name, "Текущее состояние",       0.0, d)
-        build_sheet(wb, "Цель 20% рент.",       jk_name, "Сценарий: цель ЧП 20%",   0.0, d,
-                    is_target_margin=True, target_margin=0.20)
-        build_sheet(wb, "Цель 15% рент.",       jk_name, "Сценарий: цель ЧП 15%",   0.0, d,
-                    is_target_margin=True, target_margin=0.15)
+    build_sheet(wb, "Текущий бюджет",  jk_name, "Текущее состояние",                  0.0, d, is_current=True)
+    build_sheet(wb, "+30% ФОТ → 20%",  jk_name, "ФОТ +30%  →  цель ЧП 20%",          0.3, d)
+    build_sheet(wb, "+40% ФОТ → 20%",  jk_name, "ФОТ +40%  →  цель ЧП 20%",          0.4, d)
 
     wb.save(output_path)
     print(f"✓ {output_path.name}")
