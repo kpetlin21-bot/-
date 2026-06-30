@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>График генеральной уборки — Щебракова 150</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #fff;
+      --text: #1a1f2e;
+      --muted: #5c6578;
+      --line: #dde3ec;
+      --accent: #2563eb;
+      --p1: #dbeafe;
+      --p2: #dcfce7;
+      --p3: #fef9c3;
+      --p4: #fce7f3;
+      --p5: #ede9fe;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .page {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+    header {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.55rem;
+      font-weight: 700;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 1.05rem;
+      margin: 0 0 16px;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 20px;
+      font-size: 0.92rem;
+    }
+    .meta span {
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .entrances {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      margin: 18px 0 0;
+    }
+    .ent {
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-align: center;
+    }
+    .ent-1 { background: var(--p1); }
+    .ent-2 { background: var(--p2); }
+    .ent-3 { background: var(--p3); }
+    .ent-4 { background: var(--p4); }
+    .ent-5 { background: var(--p5); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    thead th {
+      background: #1e293b;
+      color: #fff;
+      text-align: left;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody tr:hover { background: #eef4ff; }
+    td {
+      padding: 11px 14px;
+      border-top: 1px solid var(--line);
+      vertical-align: top;
+    }
+    .date-col {
+      white-space: nowrap;
+      font-weight: 600;
+      width: 130px;
+    }
+    .wd {
+      color: var(--muted);
+      font-weight: 500;
+      margin-left: 4px;
+    }
+    .count {
+      text-align: center;
+      width: 72px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .note {
+      margin-top: 16px;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .timeline {
+      margin-top: 24px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .timeline h2 {
+      margin: 0 0 14px;
+      font-size: 1rem;
+    }
+    .bar-wrap {
+      display: grid;
+      gap: 6px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 36px;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+    }
+    .bar {
+      height: 18px;
+      border-radius: 4px;
+      background: #e2e8f0;
+      overflow: hidden;
+      display: flex;
+    }
+    .seg { height: 100%; }
+    .seg-1 { background: #3b82f6; }
+    .seg-2 { background: #22c55e; }
+    .seg-3 { background: #eab308; }
+    .seg-4 { background: #ec4899; }
+    .seg-5 { background: #8b5cf6; }
+
+    @media print {
+      body { background: #fff; }
+      .page { padding: 0; max-width: none; }
+      header, table, .timeline {
+        border: 1px solid #ccc;
+        box-shadow: none;
+      }
+      tbody tr:hover { background: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>График генеральной уборки</h1>
+      <p class="subtitle">Жилой дом — <strong>Щебракова 150</strong></p>
+      <div class="meta">
+        <span>6 — 31 июля 2026</span>
+        <span>пн — пт</span>
+        <span>59 этажей / 20 рабочих дней</span>
+        <span>3 этажа в день (31 июля — 2 этажа)</span>
+      </div>
+      <div class="entrances">
+        <div class="ent ent-1">1 подъезд — 7 эт.</div>
+        <div class="ent ent-2">2 подъезд — 9 эт.</div>
+        <div class="ent ent-3">3 подъезд — 9 эт.</div>
+        <div class="ent ent-4">4 подъезд — 9 эт.</div>
+        <div class="ent ent-5">5 подъезд — 25 эт.</div>
+      </div>
+    </header>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Этажей</th>
+          <th>Убирается</th>
+        </tr>
+      </thead>
+      <tbody id="schedule-body"></tbody>
+    </table>
+
+    <div class="timeline">
+      <h2>Нагрузка по подъездам (дни уборки)</h2>
+      <div class="bar-wrap" id="timeline"></div>
+    </div>
+
+    <p class="note">
+      Уборка ведётся последовательно: сначала 1-й подъезд (с 1-го этажа), затем 2-й, 3-й, 4-й и 5-й.
+      Суббота и воскресенье — выходные. Всего в доме 59 этажей; при 20 рабочих днях
+      равномерная нагрузка — 3 этажа в день, в последний день — 2 этажа.
+    </p>
+  </div>
+
+  <script>
+    const DATA = {
+      schedule: [
+        { date: "2026-07-06", day: 6, month: "июля", weekday: "пн", count: 3, label: "подъезд 1, эт. 1–3", entrances: [1] },
+        { date: "2026-07-07", day: 7, month: "июля", weekday: "вт", count: 3, label: "подъезд 1, эт. 4–6", entrances: [1] },
+        { date: "2026-07-08", day: 8, month: "июля", weekday: "ср", count: 3, label: "подъезд 1, эт. 7; подъезд 2, эт. 1–2", entrances: [1, 2] },
+        { date: "2026-07-09", day: 9, month: "июля", weekday: "чт", count: 3, label: "подъезд 2, эт. 3–5", entrances: [2] },
+        { date: "2026-07-10", day: 10, month: "июля", weekday: "пт", count: 3, label: "подъезд 2, эт. 6–8", entrances: [2] },
+        { date: "2026-07-13", day: 13, month: "июля", weekday: "пн", count: 3, label: "подъезд 2, эт. 9; подъезд 3, эт. 1–2", entrances: [2, 3] },
+        { date: "2026-07-14", day: 14, month: "июля", weekday: "вт", count: 3, label: "подъезд 3, эт. 3–5", entrances: [3] },
+        { date: "2026-07-15", day: 15, month: "июля", weekday: "ср", count: 3, label: "подъезд 3, эт. 6–8", entrances: [3] },
+        { date: "2026-07-16", day: 16, month: "июля", weekday: "чт", count: 3, label: "подъезд 3, эт. 9; подъезд 4, эт. 1–2", entrances: [3, 4] },
+        { date: "2026-07-17", day: 17, month: "июля", weekday: "пт", count: 3, label: "подъезд 4, эт. 3–5", entrances: [4] },
+        { date: "2026-07-20", day: 20, month: "июля", weekday: "пн", count: 3, label: "подъезд 4, эт. 6–8", entrances: [4] },
+        { date: "2026-07-21", day: 21, month: "июля", weekday: "вт", count: 3, label: "подъезд 4, эт. 9; подъезд 5, эт. 1–2", entrances: [4, 5] },
+        { date: "2026-07-22", day: 22, month: "июля", weekday: "ср", count: 3, label: "подъезд 5, эт. 3–5", entrances: [5] },
+        { date: "2026-07-23", day: 23, month: "июля", weekday: "чт", count: 3, label: "подъезд 5, эт. 6–8", entrances: [5] },
+        { date: "2026-07-24", day: 24, month: "июля", weekday: "пт", count: 3, label: "подъезд 5, эт. 9–11", entrances: [5] },
+        { date: "2026-07-27", day: 27, month: "июля", weekday: "пн", count: 3, label: "подъезд 5, эт. 12–14", entrances: [5] },
+        { date: "2026-07-28", day: 28, month: "июля", weekday: "вт", count: 3, label: "подъезд 5, эт. 15–17", entrances: [5] },
+        { date: "2026-07-29", day: 29, month: "июля", weekday: "ср", count: 3, label: "подъезд 5, эт. 18–20", entrances: [5] },
+        { date: "2026-07-30", day: 30, month: "июля", weekday: "чт", count: 3, label: "подъезд 5, эт. 21–23", entrances: [5] },
+        { date: "2026-07-31", day: 31, month: "июля", weekday: "пт", count: 2, label: "подъезд 5, эт. 24–25", entrances: [5] }
+      ],
+      entranceDays: [
+        { n: 1, days: 3, floors: 7 },
+        { n: 2, days: 4, floors: 9 },
+        { n: 3, days: 4, floors: 9 },
+        { n: 4, days: 4, floors: 9 },
+        { n: 5, days: 9, floors: 25 }
+      ]
+    };
+
+    const tbody = document.getElementById('schedule-body');
+    tbody.innerHTML = DATA.schedule.map(row => `
+      <tr>
+        <td class="date-col">${row.day} ${row.month}<span class="wd">${row.weekday}</span></td>
+        <td class="count">${row.count}</td>
+        <td>${row.label}</td>
+      </tr>
+    `).join('');
+
+    const maxDays = Math.max(...DATA.entranceDays.map(e => e.days));
+    document.getElementById('timeline').innerHTML = DATA.entranceDays.map(e => {
+      const pct = Math.round((e.days / maxDays) * 100);
+      return `
+        <div class="bar-row">
+          <span>Подъезд ${e.n}</span>
+          <div class="bar"><div class="seg seg-${e.n}" style="width:${pct}%"></div></div>
+          <span>${e.days} дн.</span>
+        </div>`;
+    }).join('');
+  </script>
+</body>
+</html>
