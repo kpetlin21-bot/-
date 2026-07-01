@@ -241,10 +241,10 @@ def build_fot(wb: Workbook) -> None:
     # Легенда ставок (ссылки на Параметры)
     c(ws, R, 1, "Ставки (из листа Параметры):", bold=True, bg=BG["sub"]); R += 1
     ref_params = [
-        ("НДФЛ:", "='📋 Параметры'!B19", PFMT),
-        ("СВ РФ (до порога):", "='📋 Параметры'!B20", PFMT),
-        ("СВ (выше порога):", "='📋 Параметры'!B21", PFMT),
-        ("СВ СНГ:", "='📋 Параметры'!B22", PFMT),
+        ("НДФЛ:", "='📋 Параметры'!B28", PFMT),
+        ("СВ РФ (до порога):", "='📋 Параметры'!B29", PFMT),
+        ("СВ (выше порога):", "='📋 Параметры'!B30", PFMT),
+        ("СВ СНГ:", "='📋 Параметры'!B31", PFMT),
     ]
     for i, (label, formula, fmt) in enumerate(ref_params):
         c(ws, R, 1, label, bg=BG["sub"])
@@ -367,8 +367,8 @@ def build_fot(wb: Workbook) -> None:
 
     c(ws, R, 1, "Среднегодовой ФОТ/мес", bold=True, bg=BG["formula"])
     for col in range(2, 9): c(ws, R, col, bg=BG["formula"])
-    c(ws, R, 9, (f"=(I{FOT_SUMMER_ROW}*'📋 Параметры'!B32+"
-                 f"J{FOT_WINTER_ROW}*'📋 Параметры'!B33)/12"),
+    c(ws, R, 9, (f"=(I{FOT_SUMMER_ROW}*'📋 Параметры'!B42+"
+                 f"J{FOT_WINTER_ROW}*'📋 Параметры'!B43)/12"),
       bg=BG["formula"], h="right", fmt=NFMT, bold=True); R += 1
 
     R += 1
@@ -450,7 +450,7 @@ def build_estimate(wb: Workbook) -> None:
         c(ws, R, 1, f"  {label}", bg=row_bg)
         c(ws, R, 2, 0, bg=BG["input"], h="right", fmt=NFMT)  # ФОТ лето — ВВОД
         c(ws, R, 3, 0, bg=BG["input"], h="right", fmt=NFMT)  # ФОТ зима — ВВОД
-        c(ws, R, 4, f"=(B{R}*'📋 Параметры'!B32+C{R}*'📋 Параметры'!B33)/12",
+        c(ws, R, 4, f"=(B{R}*'📋 Параметры'!B42+C{R}*'📋 Параметры'!B43)/12",
           bg=BG["formula"], h="right", fmt=NFMT)
         c(ws, R, 5, "", bg=BG["white"])
         fot_rows[key] = R; R += 1
@@ -483,7 +483,7 @@ def build_estimate(wb: Workbook) -> None:
         c(ws, R, 1, f"  {label}", bg=BG["white"])
         c(ws, R, 2, summer_def or None, bg=BG["input"], h="right", fmt=NFMT)
         c(ws, R, 3, winter_def or None, bg=BG["input"], h="right", fmt=NFMT)
-        c(ws, R, 4, f"=(B{R}*'📋 Параметры'!B32+C{R}*'📋 Параметры'!B33)/12",
+        c(ws, R, 4, f"=(B{R}*'📋 Параметры'!B42+C{R}*'📋 Параметры'!B43)/12",
           bg=BG["formula"], h="right", fmt=NFMT)
         c(ws, R, 5, "", bg=BG["white"])
         other_direct_rows.append(R); R += 1
@@ -513,9 +513,9 @@ def build_estimate(wb: Workbook) -> None:
 
     prc_rows = {}
     pricing_items = [
-        ("Накладные расходы (%)", "='📋 Параметры'!B27", f"=D{COST_ROW}*'📋 Параметры'!B27"),
-        ("Прибыль (%)",           "='📋 Параметры'!B28", f"=D{COST_ROW}*'📋 Параметры'!B28"),
-        ("Налог на прибыль (15%)", None,                 f"=D{COST_ROW}*'📋 Параметры'!B28*'📋 Параметры'!B24"),
+        ("Накладные расходы (%)", "='📋 Параметры'!B35", f"=D{COST_ROW}*'📋 Параметры'!B35"),
+        ("Прибыль (%)",           "='📋 Параметры'!B28", f"=D{COST_ROW}*'📋 Параметры'!B37"),
+        ("Налог на прибыль (15%)", None,                 f"=D{COST_ROW}*'📋 Параметры'!B36*'📋 Параметры'!B32"),
     ]
     for label, pct_formula, sum_formula in pricing_items:
         c(ws, R, 1, f"  {label}", bg=BG["formula"])
@@ -538,7 +538,7 @@ def build_estimate(wb: Workbook) -> None:
 
     # НДС
     c(ws, R, 1, "НДС 5%/мес", bg=BG["formula"])
-    c(ws, R, 4, f"=D{REV_NO_NDS_ROW}*'📋 Параметры'!B18",
+    c(ws, R, 4, f"=D{REV_NO_NDS_ROW}*'📋 Параметры'!B26",
       bg=BG["formula"], h="right", fmt=NFMT)
     for col in [2,3,5]: c(ws, R, col, bg=BG["formula"])
     NDS_ROW = R; R += 1
@@ -568,7 +568,7 @@ def build_estimate(wb: Workbook) -> None:
     kpi_row("Цена контракта/мес (с НДС)",
             f"=D{CONTRACT_ROW}", NFMT, BG["result"])
     kpi_row("Чистая прибыль/мес (до КП-метода)",
-            f"=D{CONTRACT_ROW}-D{COST_ROW}-D{NDS_ROW}-D{COST_ROW}*'📋 Параметры'!B28*'📋 Параметры'!B24", NFMT, BG["result"])
+            f"=D{CONTRACT_ROW}-D{COST_ROW}-D{NDS_ROW}-D{COST_ROW}*'📋 Параметры'!B36*'📋 Параметры'!B32", NFMT, BG["result"])
     kpi_row("Рентабельность ЧП (от цены без НДС)",
             f"=IFERROR((D{REV_NO_NDS_ROW}-D{COST_ROW})/ D{REV_NO_NDS_ROW},0)", PFMT, BG["result"])
     kpi_row("ФОТ / Выручка",
@@ -715,10 +715,10 @@ def build_pl(wb: Workbook) -> None:
         for m in months[:-1]:
             c_l = get_column_letter(MCOL[m])
             if "Бэк-Офис" in label:
-                c(ws, R, MCOL[m], f"={c_l}{REV_ROW}*'📋 Параметры'!B29",
+                c(ws, R, MCOL[m], f"={c_l}{REV_ROW}*'📋 Параметры'!B38",
                   bg=BG["formula"], h="right", fmt=NFMT)
             elif "управления" in label:
-                c(ws, R, MCOL[m], f"={c_l}{REV_ROW}*'📋 Параметры'!B30",
+                c(ws, R, MCOL[m], f"={c_l}{REV_ROW}*'📋 Параметры'!B39",
                   bg=BG["formula"], h="right", fmt=NFMT)
             else:
                 c(ws, R, MCOL[m], 0, bg=BG["input"], h="right", fmt=NFMT)
@@ -749,8 +749,8 @@ def build_pl(wb: Workbook) -> None:
     section_row(ws, R, "НАЛОГИ", len(months)+1, bg=BG["section"]); R += 1
     tax_rows_pl = []
     for label, fml in [
-        ("  НДС 5% (от выручки)", f"={{C}}{REV_ROW}*'📋 Параметры'!B18"),
-        ("  УСН", f"={{C}}{REV_ROW}*'📋 Параметры'!B19"),
+        ("  НДС 5% (от выручки)", f"={{C}}{REV_ROW}*'📋 Параметры'!B26"),
+        ("  УСН", f"={{C}}{REV_ROW}*'📋 Параметры'!B27"),
         ("  Амортизация", None),
     ]:
         c(ws, R, 1, label, bg=BG["formula"] if fml else BG["input"], size=10)
