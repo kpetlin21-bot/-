@@ -119,6 +119,22 @@
       font-weight: 700;
       color: var(--accent);
     }
+    tr.first-floor {
+      background: #fffbeb !important;
+    }
+    tr.first-floor .count {
+      color: #b45309;
+    }
+    .badge-first {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
     .note {
       margin-top: 16px;
       font-size: 0.88rem;
@@ -180,7 +196,8 @@
         <span>6 — 31 июля 2026</span>
         <span>пн — пт</span>
         <span>59 этажей / 20 рабочих дней</span>
-        <span>3 этажа в день (31 июля — 2 этажа)</span>
+        <span>1-й этаж каждого подъезда — отдельный день</span>
+        <span>остальные дни: 3–4 этажа</span>
       </div>
       <div class="entrances">
         <div class="ent ent-1">1 подъезд — 7 эт.</div>
@@ -208,51 +225,51 @@
     </div>
 
     <p class="note">
-      Уборка ведётся последовательно: сначала 1-й подъезд (с 1-го этажа), затем 2-й, 3-й, 4-й и 5-й.
-      Суббота и воскресенье — выходные. Всего в доме 59 этажей; при 20 рабочих днях
-      равномерная нагрузка — 3 этажа в день, в последний день — 2 этажа.
+      Уборка ведётся последовательно: сначала 1-й подъезд, затем 2-й, 3-й, 4-й и 5-й.
+      <strong>1-й этаж каждого подъезда моется отдельно</strong> — в этот день другие этажи не убираются.
+      Остальные этажи распределены равномерно: 3–4 этажа в день. Суббота и воскресенье — выходные.
     </p>
   </div>
 
   <script>
     const DATA = {
       schedule: [
-        { date: "2026-07-06", day: 6, month: "июля", weekday: "пн", count: 3, label: "подъезд 1, эт. 1–3", entrances: [1] },
-        { date: "2026-07-07", day: 7, month: "июля", weekday: "вт", count: 3, label: "подъезд 1, эт. 4–6", entrances: [1] },
-        { date: "2026-07-08", day: 8, month: "июля", weekday: "ср", count: 3, label: "подъезд 1, эт. 7; подъезд 2, эт. 1–2", entrances: [1, 2] },
-        { date: "2026-07-09", day: 9, month: "июля", weekday: "чт", count: 3, label: "подъезд 2, эт. 3–5", entrances: [2] },
-        { date: "2026-07-10", day: 10, month: "июля", weekday: "пт", count: 3, label: "подъезд 2, эт. 6–8", entrances: [2] },
-        { date: "2026-07-13", day: 13, month: "июля", weekday: "пн", count: 3, label: "подъезд 2, эт. 9; подъезд 3, эт. 1–2", entrances: [2, 3] },
-        { date: "2026-07-14", day: 14, month: "июля", weekday: "вт", count: 3, label: "подъезд 3, эт. 3–5", entrances: [3] },
-        { date: "2026-07-15", day: 15, month: "июля", weekday: "ср", count: 3, label: "подъезд 3, эт. 6–8", entrances: [3] },
-        { date: "2026-07-16", day: 16, month: "июля", weekday: "чт", count: 3, label: "подъезд 3, эт. 9; подъезд 4, эт. 1–2", entrances: [3, 4] },
-        { date: "2026-07-17", day: 17, month: "июля", weekday: "пт", count: 3, label: "подъезд 4, эт. 3–5", entrances: [4] },
-        { date: "2026-07-20", day: 20, month: "июля", weekday: "пн", count: 3, label: "подъезд 4, эт. 6–8", entrances: [4] },
-        { date: "2026-07-21", day: 21, month: "июля", weekday: "вт", count: 3, label: "подъезд 4, эт. 9; подъезд 5, эт. 1–2", entrances: [4, 5] },
-        { date: "2026-07-22", day: 22, month: "июля", weekday: "ср", count: 3, label: "подъезд 5, эт. 3–5", entrances: [5] },
-        { date: "2026-07-23", day: 23, month: "июля", weekday: "чт", count: 3, label: "подъезд 5, эт. 6–8", entrances: [5] },
-        { date: "2026-07-24", day: 24, month: "июля", weekday: "пт", count: 3, label: "подъезд 5, эт. 9–11", entrances: [5] },
-        { date: "2026-07-27", day: 27, month: "июля", weekday: "пн", count: 3, label: "подъезд 5, эт. 12–14", entrances: [5] },
-        { date: "2026-07-28", day: 28, month: "июля", weekday: "вт", count: 3, label: "подъезд 5, эт. 15–17", entrances: [5] },
-        { date: "2026-07-29", day: 29, month: "июля", weekday: "ср", count: 3, label: "подъезд 5, эт. 18–20", entrances: [5] },
-        { date: "2026-07-30", day: 30, month: "июля", weekday: "чт", count: 3, label: "подъезд 5, эт. 21–23", entrances: [5] },
-        { date: "2026-07-31", day: 31, month: "июля", weekday: "пт", count: 2, label: "подъезд 5, эт. 24–25", entrances: [5] }
+        { date: "2026-07-06", day: 6, month: "июля", weekday: "пн", count: 1, label: "подъезд 1, эт. 1", firstFloorDay: true },
+        { date: "2026-07-07", day: 7, month: "июля", weekday: "вт", count: 4, label: "подъезд 1, эт. 2–5", firstFloorDay: false },
+        { date: "2026-07-08", day: 8, month: "июля", weekday: "ср", count: 2, label: "подъезд 1, эт. 6–7", firstFloorDay: false },
+        { date: "2026-07-09", day: 9, month: "июля", weekday: "чт", count: 1, label: "подъезд 2, эт. 1", firstFloorDay: true },
+        { date: "2026-07-10", day: 10, month: "июля", weekday: "пт", count: 4, label: "подъезд 2, эт. 2–5", firstFloorDay: false },
+        { date: "2026-07-13", day: 13, month: "июля", weekday: "пн", count: 4, label: "подъезд 2, эт. 6–9", firstFloorDay: false },
+        { date: "2026-07-14", day: 14, month: "июля", weekday: "вт", count: 1, label: "подъезд 3, эт. 1", firstFloorDay: true },
+        { date: "2026-07-15", day: 15, month: "июля", weekday: "ср", count: 4, label: "подъезд 3, эт. 2–5", firstFloorDay: false },
+        { date: "2026-07-16", day: 16, month: "июля", weekday: "чт", count: 4, label: "подъезд 3, эт. 6–9", firstFloorDay: false },
+        { date: "2026-07-17", day: 17, month: "июля", weekday: "пт", count: 1, label: "подъезд 4, эт. 1", firstFloorDay: true },
+        { date: "2026-07-20", day: 20, month: "июля", weekday: "пн", count: 4, label: "подъезд 4, эт. 2–5", firstFloorDay: false },
+        { date: "2026-07-21", day: 21, month: "июля", weekday: "вт", count: 4, label: "подъезд 4, эт. 6–9", firstFloorDay: false },
+        { date: "2026-07-22", day: 22, month: "июля", weekday: "ср", count: 1, label: "подъезд 5, эт. 1", firstFloorDay: true },
+        { date: "2026-07-23", day: 23, month: "июля", weekday: "чт", count: 4, label: "подъезд 5, эт. 2–5", firstFloorDay: false },
+        { date: "2026-07-24", day: 24, month: "июля", weekday: "пт", count: 4, label: "подъезд 5, эт. 6–9", firstFloorDay: false },
+        { date: "2026-07-27", day: 27, month: "июля", weekday: "пн", count: 4, label: "подъезд 5, эт. 10–13", firstFloorDay: false },
+        { date: "2026-07-28", day: 28, month: "июля", weekday: "вт", count: 3, label: "подъезд 5, эт. 14–16", firstFloorDay: false },
+        { date: "2026-07-29", day: 29, month: "июля", weekday: "ср", count: 3, label: "подъезд 5, эт. 17–19", firstFloorDay: false },
+        { date: "2026-07-30", day: 30, month: "июля", weekday: "чт", count: 3, label: "подъезд 5, эт. 20–22", firstFloorDay: false },
+        { date: "2026-07-31", day: 31, month: "июля", weekday: "пт", count: 3, label: "подъезд 5, эт. 23–25", firstFloorDay: false }
       ],
       entranceDays: [
         { n: 1, days: 3, floors: 7 },
-        { n: 2, days: 4, floors: 9 },
-        { n: 3, days: 4, floors: 9 },
-        { n: 4, days: 4, floors: 9 },
-        { n: 5, days: 9, floors: 25 }
+        { n: 2, days: 3, floors: 9 },
+        { n: 3, days: 3, floors: 9 },
+        { n: 4, days: 3, floors: 9 },
+        { n: 5, days: 8, floors: 25 }
       ]
     };
 
     const tbody = document.getElementById('schedule-body');
     tbody.innerHTML = DATA.schedule.map(row => `
-      <tr>
+      <tr class="${row.firstFloorDay ? 'first-floor' : ''}">
         <td class="date-col">${row.day} ${row.month}<span class="wd">${row.weekday}</span></td>
         <td class="count">${row.count}</td>
-        <td>${row.label}</td>
+        <td>${row.label}${row.firstFloorDay ? '<span class="badge-first">1-й этаж</span>' : ''}</td>
       </tr>
     `).join('');
 

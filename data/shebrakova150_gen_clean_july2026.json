@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "address": "Щебракова 150",
   "title": "График генеральной уборки",
   "period": {
@@ -14,32 +14,37 @@
     { "number": 4, "floors": 9 },
     { "number": 5, "floors": 25 }
   ],
+  "rules": {
+    "first_floor_separate_day": true,
+    "order": "подъезды по порядку, этажи снизу вверх"
+  },
   "summary": {
     "total_floors": 59,
     "work_days": 20,
-    "floors_per_day": "3 (в последний день — 2)",
-    "order": "подъезды по порядку, этажи снизу вверх"
+    "first_floor_days": 5,
+    "regular_days": 15,
+    "regular_floors_per_day": "3–4 этажа"
   },
   "schedule": [
-    { "date": "2026-07-06", "weekday": "пн", "count": 3, "label": "подъезд 1, эт. 1–3" },
-    { "date": "2026-07-07", "weekday": "вт", "count": 3, "label": "подъезд 1, эт. 4–6" },
-    { "date": "2026-07-08", "weekday": "ср", "count": 3, "label": "подъезд 1, эт. 7; подъезд 2, эт. 1–2" },
-    { "date": "2026-07-09", "weekday": "чт", "count": 3, "label": "подъезд 2, эт. 3–5" },
-    { "date": "2026-07-10", "weekday": "пт", "count": 3, "label": "подъезд 2, эт. 6–8" },
-    { "date": "2026-07-13", "weekday": "пн", "count": 3, "label": "подъезд 2, эт. 9; подъезд 3, эт. 1–2" },
-    { "date": "2026-07-14", "weekday": "вт", "count": 3, "label": "подъезд 3, эт. 3–5" },
-    { "date": "2026-07-15", "weekday": "ср", "count": 3, "label": "подъезд 3, эт. 6–8" },
-    { "date": "2026-07-16", "weekday": "чт", "count": 3, "label": "подъезд 3, эт. 9; подъезд 4, эт. 1–2" },
-    { "date": "2026-07-17", "weekday": "пт", "count": 3, "label": "подъезд 4, эт. 3–5" },
-    { "date": "2026-07-20", "weekday": "пн", "count": 3, "label": "подъезд 4, эт. 6–8" },
-    { "date": "2026-07-21", "weekday": "вт", "count": 3, "label": "подъезд 4, эт. 9; подъезд 5, эт. 1–2" },
-    { "date": "2026-07-22", "weekday": "ср", "count": 3, "label": "подъезд 5, эт. 3–5" },
-    { "date": "2026-07-23", "weekday": "чт", "count": 3, "label": "подъезд 5, эт. 6–8" },
-    { "date": "2026-07-24", "weekday": "пт", "count": 3, "label": "подъезд 5, эт. 9–11" },
-    { "date": "2026-07-27", "weekday": "пн", "count": 3, "label": "подъезд 5, эт. 12–14" },
-    { "date": "2026-07-28", "weekday": "вт", "count": 3, "label": "подъезд 5, эт. 15–17" },
-    { "date": "2026-07-29", "weekday": "ср", "count": 3, "label": "подъезд 5, эт. 18–20" },
-    { "date": "2026-07-30", "weekday": "чт", "count": 3, "label": "подъезд 5, эт. 21–23" },
-    { "date": "2026-07-31", "weekday": "пт", "count": 2, "label": "подъезд 5, эт. 24–25" }
+    { "date": "2026-07-06", "weekday": "пн", "count": 1, "label": "подъезд 1, эт. 1", "first_floor_day": true },
+    { "date": "2026-07-07", "weekday": "вт", "count": 4, "label": "подъезд 1, эт. 2–5", "first_floor_day": false },
+    { "date": "2026-07-08", "weekday": "ср", "count": 2, "label": "подъезд 1, эт. 6–7", "first_floor_day": false },
+    { "date": "2026-07-09", "weekday": "чт", "count": 1, "label": "подъезд 2, эт. 1", "first_floor_day": true },
+    { "date": "2026-07-10", "weekday": "пт", "count": 4, "label": "подъезд 2, эт. 2–5", "first_floor_day": false },
+    { "date": "2026-07-13", "weekday": "пн", "count": 4, "label": "подъезд 2, эт. 6–9", "first_floor_day": false },
+    { "date": "2026-07-14", "weekday": "вт", "count": 1, "label": "подъезд 3, эт. 1", "first_floor_day": true },
+    { "date": "2026-07-15", "weekday": "ср", "count": 4, "label": "подъезд 3, эт. 2–5", "first_floor_day": false },
+    { "date": "2026-07-16", "weekday": "чт", "count": 4, "label": "подъезд 3, эт. 6–9", "first_floor_day": false },
+    { "date": "2026-07-17", "weekday": "пт", "count": 1, "label": "подъезд 4, эт. 1", "first_floor_day": true },
+    { "date": "2026-07-20", "weekday": "пн", "count": 4, "label": "подъезд 4, эт. 2–5", "first_floor_day": false },
+    { "date": "2026-07-21", "weekday": "вт", "count": 4, "label": "подъезд 4, эт. 6–9", "first_floor_day": false },
+    { "date": "2026-07-22", "weekday": "ср", "count": 1, "label": "подъезд 5, эт. 1", "first_floor_day": true },
+    { "date": "2026-07-23", "weekday": "чт", "count": 4, "label": "подъезд 5, эт. 2–5", "first_floor_day": false },
+    { "date": "2026-07-24", "weekday": "пт", "count": 4, "label": "подъезд 5, эт. 6–9", "first_floor_day": false },
+    { "date": "2026-07-27", "weekday": "пн", "count": 4, "label": "подъезд 5, эт. 10–13", "first_floor_day": false },
+    { "date": "2026-07-28", "weekday": "вт", "count": 3, "label": "подъезд 5, эт. 14–16", "first_floor_day": false },
+    { "date": "2026-07-29", "weekday": "ср", "count": 3, "label": "подъезд 5, эт. 17–19", "first_floor_day": false },
+    { "date": "2026-07-30", "weekday": "чт", "count": 3, "label": "подъезд 5, эт. 20–22", "first_floor_day": false },
+    { "date": "2026-07-31", "weekday": "пт", "count": 3, "label": "подъезд 5, эт. 23–25", "first_floor_day": false }
   ]
 }
